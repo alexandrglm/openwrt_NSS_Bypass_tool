@@ -319,38 +319,34 @@ cmd_remove() {
         ui_error "Usage: nss-switch.sh remove <rule-id>"
         return 1
     fi
-
     ui_banner
     ui_section "Remove Rule $id"
 
-    # Show rule before removing
     local line
     line=$(rules_get "$id") || { ui_error "Rule $id not found"; return 1; }
     rules_parse "$line"
-    ui_kv "ID"       "$RULE_ID"
-    ui_kv "Proto"    "$RULE_PROTO"
-    ui_kv "Src IP"   "$RULE_SRC_IP"
-    ui_kv "Dst IP"   "$RULE_DST_IP"
-    ui_kv "Sport"    "$RULE_SPORT"
-    ui_kv "Dport"    "$RULE_DPORT"
-    ui_kv "Iface"    "$RULE_IFACE"
-    ui_kv "Comment"  "$RULE_COMMENT"
+    ui_kv "ID"      "$RULE_ID"
+    ui_kv "Proto"   "$RULE_PROTO"
+    ui_kv "Src IP"  "$RULE_SRC_IP"
+    ui_kv "Dst IP"  "$RULE_DST_IP"
+    ui_kv "Sport"   "$RULE_SPORT"
+    ui_kv "Dport"   "$RULE_DPORT"
+    ui_kv "Iface"   "$RULE_IFACE"
+    ui_kv "Comment" "$RULE_COMMENT"
 
     ui_confirm "Remove this rule?" || { ui_warn "Aborted"; return 0; }
 
     rules_remove "$id"
     nft_apply
 
-    # Defunct so ECM can re-accelerate those flows
-    ui_info "Defuncting ECM connections so NSS can re-accelerate..."
-    if [ "$RULE_DPORT" != "any" ]; then
-        ecm_defunct_by_port "$RULE_DPORT"
-    elif [ "$RULE_SPORT" != "any" ]; then
-        ecm_defunct_by_port "$RULE_SPORT"
-    else
-        ecm_defunct_all
-    fi
-    ui_ok "Rule $id removed. ECM will re-evaluate and may re-accelerate those flows."
+    ui_info "Clearing conntrack entries for this rule..."
+    ct_clear_rule_marks "$RULE_PROTO" "$RULE_SRC_IP" "$RULE_DST_IP" \
+        "$RULE_SPORT" "$RULE_DPORT" "$RULE_IFACE"
+
+    ui_info "Defuncting ECM so NSS can re-accelerate..."
+    ecm_defunct_all
+
+    ui_ok "Rule $id removed. ECM will re-evaluate and re-accelerate those flows."
 }
 
 # ─── COMMAND: flush ───────────────────────────────────────────────────────────

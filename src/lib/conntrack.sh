@@ -9,6 +9,55 @@ ct_check() {
     [ -f "$CONNTRACK_FILE" ] || { ui_error "conntrack not available"; return 1; }
 }
 
+# ─── Clear A rule handling with type of: iface? port? ip? protocol    ─────────────────────────────────────────────
+
+ct_clear_rule_marks() {
+    local proto="$1" src_ip="$2" dst_ip="$3"
+    local sport="$4" dport="$5" iface="$6"
+    local args=""
+
+    [ "$proto"  != "any" ] && args="$args -p $proto"
+    [ "$src_ip" != "any" ] && args="$args -s $src_ip"
+    [ "$dst_ip" != "any" ] && args="$args -d $dst_ip"
+
+    # iface → obtener subred y usar como src
+    if [ "$iface" != "any" ]; then
+        local subnet
+        subnet=$(ip addr show "$iface" 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
+        if [ -n "$subnet" ]; then
+            # Convertir IP/prefix a network address
+            local net
+            net=$(ip route show dev "$iface" 2>/dev/null | grep -v default | awk '{print $1}' | head -1)
+            [ -n "$net" ] && args="$args -s $net"
+            dbg "iface $iface resolved to subnet $net"
+        fi
+    fi
+
+    # sport/dport — no soportados en conntrack -D directamente
+    # filtramos con -L y eliminamos entrada a entrada
+    if [ "$sport" != "any" ] || [ "$dport" != "any" ]; then
+        local tmp
+        tmp=$(mktemp /tmp/nss-ct.XXXXXX)
+        conntrack -L $args 2>/dev/null > "$tmp"
+        while IFS= read -r line; do
+            [ "$sport" != "any" ] && ! echo "$line" | grep -oE 'sport=[^ ]+' | head -1 | grep -q "=$sport$" && continue
+            [ "$dport" != "any" ] && ! echo "$line" | grep -oE 'dport=[^ ]+' | head -1 | grep -q "=$dport$" && continue
+            local e_proto e_src e_dst
+            e_proto=$(echo "$line" | awk '{print $1}')
+            e_src=$(echo "$line" | grep -oE 'src=[^ ]+' | head -1 | cut -d= -f2)
+            e_dst=$(echo "$line" | grep -oE 'dst=[^ ]+' | head -1 | cut -d= -f2)
+            conntrack -D -p "$e_proto" -s "$e_src" -d "$e_dst" 2>/dev/null; true
+            dbg "Deleted: $e_proto $e_src -> $e_dst"
+        done < "$tmp"
+        rm -f "$tmp"
+    else
+        dbg "conntrack -D $args"
+        conntrack -D $args 2>/dev/null; true
+    fi
+
+    ui_ok "Conntrack entries cleared for this rule"
+}
+
 # ─── Parse one conntrack line into variables ──────────────────────────────────
 # Sets: CT_PROTO CT_SRC CT_SPORT CT_DST CT_DPORT CT_MARK CT_STATE CT_STATUS
 ct_parse_line() {

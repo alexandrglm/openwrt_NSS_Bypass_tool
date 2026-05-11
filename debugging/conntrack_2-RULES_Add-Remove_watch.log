@@ -1,0 +1,902 @@
+Refresh: 0s  |  Press Ctrl+C to exit  |  Mon May 11 12:27:31 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     11
+  NSS-bypassed (CPU):    4
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       CPU   YES
+3    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       CPU   YES
+4    tcp   PRIVACY_REMOVED:54912   142.251.208.131:80    br-lan     CPU   YES
+5    icmp  PRIVACY_REMOVED:?       8.8.8.8:?             lo         HW    NO
+6    tcp   PRIVACY_REMOVED:46200   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+7    tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       CPU   YES
+8    tcp   PRIVACY_REMOVED:39742   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+9    tcp   PRIVACY_REMOVED:37008   160.79.104.10:443     lan3       HW    NO
+10   tcp   PRIVACY_REMOVED:54982   34.107.243.93:443     lan3       HW    NO
+11   udp   PRIVACY_REMOVED:43367   142.251.209.74:443    lan3       HW    NO
+root@ZTE:~# nss-switch list
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+
+══ Active NSS Bypass Rules ══
+ID   PROTO SRC_IP             DST_IP             SPORT  DPORT  IFACE      PERSIST  COMMENT
+────────────────────────────────────────────────────────────────
+1    any   any                any                any    any    lan2       yes      Deco lan2 off NSS
+2    any   any                any                any    any    br-lan     yes      br-lan off NSS
+────────────────────────────────────────────────────────────────
+  Total rules:           2
+
+  Rules file:            /usr/bin/NSS-Switch/state/rules.conf
+  Firewall script:       /usr/bin/NSS-Switch/firewall.d/nss-bypass
+[ OK ]  NSS-Switch chains are live in nftables
+root@ZTE:~# nss-switch remove 1
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+
+══ Remove Rule 1 ══
+  ID:                    1
+  Proto:                 any
+  Src IP:                any
+  Dst IP:                any
+  Sport:                 any
+  Dport:                 any
+  Iface:                 lan2
+  Comment:               Deco lan2 off NSS
+Remove this rule? [y/N]: y
+[ OK ]  Rule 1 removed
+[ OK ]  Firewall reloaded, NSS-Switch rules applied
+[INFO]  Clearing conntrack entries for this rule...
+tcp      6 7438 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.39.3 sport=56756 dport=443 packets=17400 bytes=1279401 src=185.105.39.3 dst=PRIVACY_REMOVED sport=443 dport=56756 packets=69751 bytes=102978367 [ASSURED] mark=65536 use=1
+tcp      6 7438 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.39.3 sport=57924 dport=443 packets=4762 bytes=340830 src=185.105.39.3 dst=PRIVACY_REMOVED sport=443 dport=57924 packets=16466 bytes=24312628 [ASSURED] mark=65536 use=1
+tcp      6 7419 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=58450 dport=443 packets=368 bytes=25531 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=58450 packets=1098 bytes=1580744 [ASSURED] mark=65536 use=1
+[ OK ]  Conntrack entries cleared for this rule
+[INFO]  Defuncting ECM so NSS can re-accelerate...
+[ OK ]  All ECM connections defuncted (will be re-evaluated)
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 0s  |  Press Ctrl+C to exit  |  Mon May 11 12:27:54 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     16
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 0s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:06 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     16
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:08 CEST 2026
+────────────────────────────────────────────────────────────────
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:12 CEST 2026
+────────────────────────────────────────────────────────────────
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:16 CEST 2026
+────────────────────────────────────────────────────────────────
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:19 CEST 2026
+────────────────────────────────────────────────────────────────
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:23 CEST 2026
+────────────────────────────────────────────────────────────────
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:26 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     16
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:30 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     17
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:34 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     17
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:38 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     17
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:41 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     17
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:45 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     17
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:49 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     28
+  NSS-bypassed (CPU):    13
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+6    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+7    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:53 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     35
+  NSS-bypassed (CPU):    17
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:55846   185.199.110.153:443   br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+7    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+8    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+9    udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:28:57 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     40
+  NSS-bypassed (CPU):    21
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:55846   185.199.110.153:443   br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+7    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+8    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+9    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+10   udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+11   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+12   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+13   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:02 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     40
+  NSS-bypassed (CPU):    21
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:55846   185.199.110.153:443   br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+7    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+8    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+9    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+10   udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+11   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+12   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+13   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:06 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     40
+  NSS-bypassed (CPU):    21
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+7    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+8    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+9    udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+11   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+12   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:11 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     39
+  NSS-bypassed (CPU):    20
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+7    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+8    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+9    udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+11   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+12   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:15 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     39
+  NSS-bypassed (CPU):    20
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+7    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+8    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+9    udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+11   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+12   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:20 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     39
+  NSS-bypassed (CPU):    20
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+7    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+8    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+9    udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+11   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+12   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:24 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     39
+  NSS-bypassed (CPU):    21
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+2    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+3    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+4    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+7    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+8    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+9    udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+11   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+12   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+13   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+14   tcp   PRIVACY_REMOVED:54912   142.251.208.131:80    br-lan     CPU   YES
+15   tcp   PRIVACY_REMOVED:56238   142.251.142.131:443   br-lan     CPU   YES
+16   tcp   PRIVACY_REMOVED:42048   1.0.0.1:853           br-lan     CPU   YES
+17   tcp   PRIVACY_REMOVED:49676   151.101.1.91:443      br-lan     CPU   YES
+18   tcp   PRIVACY_REMOVED:44712   34.120.237.76:443     br-lan     CPU   YES
+19   tcp   PRIVACY_REMOVED:44704   34.120.237.76:443     br-lan     CPU   YES
+20   tcp   PRIVACY_REMOVED:33594   142.251.140.227:80    br-lan     CPU   YES
+21   udp   0.0.0.0:68            255.255.255.255:67    lo         CPU   YES
+22   tcp   PRIVACY_REMOVED:46200   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+23   udp   PRIVACY_REMOVED:51728   142.251.142.131:443   br-lan     CPU   YES
+24   tcp   PRIVACY_REMOVED:60650   74.125.206.188:5228   br-lan     CPU   YES
+25   tcp   PRIVACY_REMOVED:44706   34.120.237.76:443     br-lan     CPU   YES
+26   tcp   PRIVACY_REMOVED:44710   34.120.237.76:443     br-lan     CPU   YES
+27   udp   PRIVACY_REMOVED:35041   1.1.1.1:53            lo         HW    NO
+28   tcp   PRIVACY_REMOVED:57746   162.159.61.4:443      br-lan     CPU   YES
+29   udp   PRIVACY_REMOVED:19128   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:30 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     56
+  NSS-bypassed (CPU):    37
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     CPU   YES
+2    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+3    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+4    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+6    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+7    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+8    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+9    udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+10   tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+11   udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+12   tcp   PRIVACY_REMOVED:44714   34.120.237.76:443     br-lan     CPU   YES
+13   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+14   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+15   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+16   tcp   PRIVACY_REMOVED:54912   142.251.208.131:80    br-lan     CPU   YES
+17   tcp   PRIVACY_REMOVED:56238   142.251.142.131:443   br-lan     CPU   YES
+18   tcp   PRIVACY_REMOVED:42048   1.0.0.1:853           br-lan     CPU   YES
+19   tcp   PRIVACY_REMOVED:49676   151.101.1.91:443      br-lan     CPU   YES
+20   tcp   PRIVACY_REMOVED:51092   142.251.154.119:443   br-lan     CPU   YES
+21   tcp   PRIVACY_REMOVED:34448   142.251.36.142:443    br-lan     CPU   YES
+22   tcp   PRIVACY_REMOVED:44712   34.120.237.76:443     br-lan     CPU   YES
+23   tcp   PRIVACY_REMOVED:44704   34.120.237.76:443     br-lan     CPU   YES
+24   tcp   PRIVACY_REMOVED:33594   142.251.140.227:80    br-lan     CPU   YES
+25   udp   0.0.0.0:68            255.255.255.255:67    lo         CPU   YES
+26   tcp   PRIVACY_REMOVED:46200   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+27   udp   PRIVACY_REMOVED:51728   142.251.142.131:443   br-lan     CPU   YES
+28   tcp   PRIVACY_REMOVED:60650   74.125.206.188:5228   br-lan     CPU   YES
+29   tcp   PRIVACY_REMOVED:60650   74.125.206.188:5228   br-lan     CPU   YES
+30   tcp   PRIVACY_REMOVED:34450   142.251.36.142:443    br-lan     CPU   YES
+31   tcp   PRIVACY_REMOVED:44706   34.120.237.76:443     br-lan     CPU   YES
+32   tcp   PRIVACY_REMOVED:44710   34.120.237.76:443     br-lan     CPU   YES
+33   udp   PRIVACY_REMOVED:35041   1.1.1.1:53            lo         HW    NO
+34   tcp   PRIVACY_REMOVED:57746   162.159.61.4:443      br-lan     CPU   YES
+35   udp   PRIVACY_REMOVED:19128   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+36   tcp   PRIVACY_REMOVED:57746   162.159.61.4:443      br-lan     CPU   YES
+37   tcp   PRIVACY_REMOVED:57746   162.159.61.4:443      br-lan     CPU   YES
+38   udp   PRIVACY_REMOVED:19128   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+39   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+40   udp   PRIVACY_REMOVED:46620   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+41   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+42   udp   PRIVACY_REMOVED:46620   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+43   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+44   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+45   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+46   udp   PRIVACY_REMOVED:46620   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+47   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+48   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+49   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+50   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+51   tcp   PRIVACY_REMOVED:33004   188.26.221.3:1081     br-lan     CPU   YES
+52   tcp   PRIVACY_REMOVED:58450   188.26.192.1:443      lan2       HW    NO
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:36 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     76
+  NSS-bypassed (CPU):    59
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     CPU   YES
+2    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+3    tcp   PRIVACY_REMOVED:50690   PRIVACY_REMOVED:443    br-lan     CPU   YES
+4    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+7    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+8    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+9    tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     CPU   YES
+11   tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+12   udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+13   tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+14   tcp   PRIVACY_REMOVED:56292   142.251.39.163:443    br-lan     CPU   YES
+15   udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+16   tcp   PRIVACY_REMOVED:33028   188.26.221.3:1081     br-lan     CPU   YES
+17   tcp   PRIVACY_REMOVED:56290   142.251.39.163:443    br-lan     CPU   YES
+18   tcp   PRIVACY_REMOVED:44714   34.120.237.76:443     br-lan     CPU   YES
+19   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+20   tcp   PRIVACY_REMOVED:56312   142.251.39.163:443    br-lan     CPU   YES
+21   tcp   PRIVACY_REMOVED:33024   188.26.221.3:1081     br-lan     CPU   YES
+22   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+23   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+24   tcp   PRIVACY_REMOVED:54912   142.251.208.131:80    br-lan     CPU   YES
+25   tcp   PRIVACY_REMOVED:56238   142.251.142.131:443   br-lan     CPU   YES
+26   tcp   PRIVACY_REMOVED:42048   1.0.0.1:853           br-lan     CPU   YES
+27   tcp   PRIVACY_REMOVED:32986   188.26.221.3:1081     br-lan     CPU   YES
+28   tcp   PRIVACY_REMOVED:49676   151.101.1.91:443      br-lan     CPU   YES
+29   tcp   PRIVACY_REMOVED:50660   PRIVACY_REMOVED:443    br-lan     CPU   YES
+30   tcp   PRIVACY_REMOVED:56310   142.251.39.163:443    br-lan     CPU   YES
+31   tcp   PRIVACY_REMOVED:51092   142.251.154.119:443   br-lan     CPU   YES
+32   tcp   PRIVACY_REMOVED:34448   142.251.36.142:443    br-lan     CPU   YES
+33   tcp   PRIVACY_REMOVED:33030   188.26.221.3:1081     br-lan     CPU   YES
+34   tcp   PRIVACY_REMOVED:44712   34.120.237.76:443     br-lan     CPU   YES
+35   tcp   PRIVACY_REMOVED:41420   192.178.203.95:443    br-lan     CPU   YES
+36   tcp   PRIVACY_REMOVED:50688   PRIVACY_REMOVED:443    br-lan     CPU   YES
+37   tcp   PRIVACY_REMOVED:44704   34.120.237.76:443     br-lan     CPU   YES
+38   tcp   PRIVACY_REMOVED:33594   142.251.140.227:80    br-lan     CPU   YES
+39   udp   0.0.0.0:68            255.255.255.255:67    lo         CPU   YES
+40   tcp   PRIVACY_REMOVED:46200   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+41   udp   PRIVACY_REMOVED:51728   142.251.142.131:443   br-lan     CPU   YES
+42   tcp   PRIVACY_REMOVED:50668   PRIVACY_REMOVED:443    br-lan     CPU   YES
+43   tcp   PRIVACY_REMOVED:41422   192.178.203.95:443    br-lan     CPU   YES
+44   tcp   PRIVACY_REMOVED:60650   74.125.206.188:5228   br-lan     CPU   YES
+45   tcp   PRIVACY_REMOVED:44706   34.120.237.76:443     br-lan     CPU   YES
+46   tcp   PRIVACY_REMOVED:50686   PRIVACY_REMOVED:443    br-lan     CPU   YES
+47   tcp   PRIVACY_REMOVED:44710   34.120.237.76:443     br-lan     CPU   YES
+48   tcp   PRIVACY_REMOVED:50692   PRIVACY_REMOVED:443    br-lan     CPU   YES
+49   udp   PRIVACY_REMOVED:35041   1.1.1.1:53            lo         HW    NO
+50   udp   PRIVACY_REMOVED:47493   192.178.203.95:443    br-lan     CPU   YES
+51   tcp   PRIVACY_REMOVED:56308   142.251.39.163:443    br-lan     CPU   YES
+52   tcp   PRIVACY_REMOVED:57746   162.159.61.4:443      br-lan     CPU   YES
+53   udp   PRIVACY_REMOVED:19128   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:42 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     79
+  NSS-bypassed (CPU):    60
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     CPU   YES
+2    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+3    tcp   PRIVACY_REMOVED:50690   PRIVACY_REMOVED:443    br-lan     CPU   YES
+4    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+7    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+8    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+9    tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+11   udp   PRIVACY_MAIN-ROUTE:67        PRIVACY_REMOVED:68      lo         HW    NO
+12   tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+13   tcp   PRIVACY_REMOVED:56292   142.251.39.163:443    br-lan     CPU   YES
+14   udp   PRIVACY_REMOVED:10380   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+15   tcp   PRIVACY_REMOVED:33028   188.26.221.3:1081     br-lan     CPU   YES
+16   tcp   PRIVACY_REMOVED:56290   142.251.39.163:443    br-lan     CPU   YES
+17   tcp   PRIVACY_REMOVED:44714   34.120.237.76:443     br-lan     CPU   YES
+18   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+19   tcp   PRIVACY_REMOVED:56312   142.251.39.163:443    br-lan     CPU   YES
+20   tcp   PRIVACY_REMOVED:33024   188.26.221.3:1081     br-lan     CPU   YES
+21   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+22   udp   PRIVACY_REMOVED:30875   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+23   tcp   PRIVACY_REMOVED:54912   142.251.208.131:80    br-lan     CPU   YES
+24   tcp   PRIVACY_REMOVED:56238   142.251.142.131:443   br-lan     CPU   YES
+25   tcp   PRIVACY_REMOVED:42048   1.0.0.1:853           br-lan     CPU   YES
+26   tcp   PRIVACY_REMOVED:32986   188.26.221.3:1081     br-lan     CPU   YES
+27   tcp   PRIVACY_REMOVED:49676   151.101.1.91:443      br-lan     CPU   YES
+28   tcp   PRIVACY_REMOVED:50660   PRIVACY_REMOVED:443    br-lan     CPU   YES
+29   tcp   PRIVACY_REMOVED:56310   142.251.39.163:443    br-lan     CPU   YES
+30   tcp   PRIVACY_REMOVED:51092   142.251.154.119:443   br-lan     CPU   YES
+31   tcp   PRIVACY_REMOVED:34448   142.251.36.142:443    br-lan     CPU   YES
+32   tcp   PRIVACY_REMOVED:33030   188.26.221.3:1081     br-lan     CPU   YES
+33   tcp   PRIVACY_REMOVED:44712   34.120.237.76:443     br-lan     CPU   YES
+34   tcp   PRIVACY_REMOVED:41420   192.178.203.95:443    br-lan     CPU   YES
+35   tcp   PRIVACY_REMOVED:50688   PRIVACY_REMOVED:443    br-lan     CPU   YES
+36   tcp   PRIVACY_REMOVED:44704   34.120.237.76:443     br-lan     CPU   YES
+37   tcp   PRIVACY_REMOVED:33594   142.251.140.227:80    br-lan     CPU   YES
+38   udp   0.0.0.0:68            255.255.255.255:67    lo         CPU   YES
+39   tcp   PRIVACY_REMOVED:46200   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+40   udp   PRIVACY_REMOVED:51728   142.251.142.131:443   br-lan     CPU   YES
+41   tcp   PRIVACY_REMOVED:50668   PRIVACY_REMOVED:443    br-lan     CPU   YES
+42   tcp   PRIVACY_REMOVED:41422   192.178.203.95:443    br-lan     CPU   YES
+43   tcp   PRIVACY_REMOVED:60650   74.125.206.188:5228   br-lan     CPU   YES
+44   tcp   PRIVACY_REMOVED:44706   34.120.237.76:443     br-lan     CPU   YES
+45   tcp   PRIVACY_REMOVED:50686   PRIVACY_REMOVED:443    br-lan     CPU   YES
+46   tcp   PRIVACY_REMOVED:44710   34.120.237.76:443     br-lan     CPU   YES
+47   tcp   PRIVACY_REMOVED:50692   PRIVACY_REMOVED:443    br-lan     CPU   YES
+48   udp   PRIVACY_REMOVED:35041   1.1.1.1:53            lo         HW    NO
+49   udp   PRIVACY_REMOVED:47493   192.178.203.95:443    br-lan     CPU   YES
+50   tcp   PRIVACY_REMOVED:56308   142.251.39.163:443    br-lan     CPU   YES
+51   tcp   PRIVACY_REMOVED:57746   162.159.61.4:443      br-lan     CPU   YES
+52   udp   PRIVACY_REMOVED:19128   PRIVACY_MAIN-ROUTE:53        br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:49 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     56
+  NSS-bypassed (CPU):    55
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     CPU   YES
+2    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+3    tcp   PRIVACY_REMOVED:50690   PRIVACY_REMOVED:443    br-lan     CPU   YES
+4    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+7    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+8    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+9    tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+11   tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+12   tcp   PRIVACY_REMOVED:56292   142.251.39.163:443    br-lan     CPU   YES
+13   tcp   PRIVACY_REMOVED:33028   188.26.221.3:1081     br-lan     CPU   YES
+14   tcp   PRIVACY_REMOVED:56290   142.251.39.163:443    br-lan     CPU   YES
+15   tcp   PRIVACY_REMOVED:44714   34.120.237.76:443     br-lan     CPU   YES
+16   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+17   tcp   PRIVACY_REMOVED:56312   142.251.39.163:443    br-lan     CPU   YES
+18   tcp   PRIVACY_REMOVED:33024   188.26.221.3:1081     br-lan     CPU   YES
+19   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+20   tcp   PRIVACY_REMOVED:54912   142.251.208.131:80    br-lan     CPU   YES
+21   tcp   PRIVACY_REMOVED:56238   142.251.142.131:443   br-lan     CPU   YES
+22   tcp   PRIVACY_REMOVED:42048   1.0.0.1:853           br-lan     CPU   YES
+23   tcp   PRIVACY_REMOVED:32986   188.26.221.3:1081     br-lan     CPU   YES
+24   tcp   PRIVACY_REMOVED:49676   151.101.1.91:443      br-lan     CPU   YES
+25   tcp   PRIVACY_REMOVED:50660   PRIVACY_REMOVED:443    br-lan     CPU   YES
+26   tcp   PRIVACY_REMOVED:56310   142.251.39.163:443    br-lan     CPU   YES
+27   tcp   PRIVACY_REMOVED:51092   142.251.154.119:443   br-lan     CPU   YES
+28   tcp   PRIVACY_REMOVED:34448   142.251.36.142:443    br-lan     CPU   YES
+29   tcp   PRIVACY_REMOVED:33030   188.26.221.3:1081     br-lan     CPU   YES
+30   tcp   PRIVACY_REMOVED:44712   34.120.237.76:443     br-lan     CPU   YES
+31   tcp   PRIVACY_REMOVED:41420   192.178.203.95:443    br-lan     CPU   YES
+32   tcp   PRIVACY_REMOVED:50688   PRIVACY_REMOVED:443    br-lan     CPU   YES
+33   tcp   PRIVACY_REMOVED:44704   34.120.237.76:443     br-lan     CPU   YES
+34   tcp   PRIVACY_REMOVED:33594   142.251.140.227:80    br-lan     CPU   YES
+35   tcp   PRIVACY_REMOVED:46200   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+36   udp   PRIVACY_REMOVED:51728   142.251.142.131:443   br-lan     CPU   YES
+37   tcp   PRIVACY_REMOVED:50668   PRIVACY_REMOVED:443    br-lan     CPU   YES
+38   tcp   PRIVACY_REMOVED:41422   192.178.203.95:443    br-lan     CPU   YES
+39   tcp   PRIVACY_REMOVED:60650   74.125.206.188:5228   br-lan     CPU   YES
+40   tcp   PRIVACY_REMOVED:44706   34.120.237.76:443     br-lan     CPU   YES
+41   tcp   PRIVACY_REMOVED:50686   PRIVACY_REMOVED:443    br-lan     CPU   YES
+42   tcp   PRIVACY_REMOVED:44710   34.120.237.76:443     br-lan     CPU   YES
+43   tcp   PRIVACY_REMOVED:50692   PRIVACY_REMOVED:443    br-lan     CPU   YES
+44   udp   PRIVACY_REMOVED:47493   192.178.203.95:443    br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:29:55 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     69
+  NSS-bypassed (CPU):    58
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     CPU   YES
+2    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+3    tcp   PRIVACY_REMOVED:50690   PRIVACY_REMOVED:443    br-lan     CPU   YES
+4    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+7    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+8    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+9    tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+11   tcp   PRIVACY_REMOVED:33034   188.26.221.3:1081     br-lan     CPU   YES
+12   tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+13   tcp   PRIVACY_REMOVED:56292   142.251.39.163:443    br-lan     CPU   YES
+14   tcp   PRIVACY_REMOVED:33028   188.26.221.3:1081     br-lan     CPU   YES
+15   tcp   PRIVACY_REMOVED:33038   188.26.221.3:1081     br-lan     CPU   YES
+16   tcp   PRIVACY_REMOVED:56290   142.251.39.163:443    br-lan     CPU   YES
+17   tcp   PRIVACY_REMOVED:44714   34.120.237.76:443     br-lan     CPU   YES
+18   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+19   tcp   PRIVACY_REMOVED:56312   142.251.39.163:443    br-lan     CPU   YES
+20   tcp   PRIVACY_REMOVED:33024   188.26.221.3:1081     br-lan     CPU   YES
+21   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+22   tcp   PRIVACY_REMOVED:54912   142.251.208.131:80    br-lan     CPU   YES
+23   tcp   PRIVACY_REMOVED:56238   142.251.142.131:443   br-lan     CPU   YES
+24   tcp   PRIVACY_REMOVED:42048   1.0.0.1:853           br-lan     CPU   YES
+25   tcp   PRIVACY_REMOVED:32986   188.26.221.3:1081     br-lan     CPU   YES
+26   tcp   PRIVACY_REMOVED:49676   151.101.1.91:443      br-lan     CPU   YES
+27   tcp   PRIVACY_REMOVED:50660   PRIVACY_REMOVED:443    br-lan     CPU   YES
+28   tcp   PRIVACY_REMOVED:56310   142.251.39.163:443    br-lan     CPU   YES
+29   tcp   PRIVACY_REMOVED:51092   142.251.154.119:443   br-lan     CPU   YES
+30   tcp   PRIVACY_REMOVED:34448   142.251.36.142:443    br-lan     CPU   YES
+31   tcp   PRIVACY_REMOVED:33030   188.26.221.3:1081     br-lan     CPU   YES
+32   tcp   PRIVACY_REMOVED:44712   34.120.237.76:443     br-lan     CPU   YES
+33   tcp   PRIVACY_REMOVED:41420   192.178.203.95:443    br-lan     CPU   YES
+34   tcp   PRIVACY_REMOVED:50688   PRIVACY_REMOVED:443    br-lan     CPU   YES
+35   tcp   PRIVACY_REMOVED:44704   34.120.237.76:443     br-lan     CPU   YES
+36   tcp   PRIVACY_REMOVED:33594   142.251.140.227:80    br-lan     CPU   YES
+37   tcp   PRIVACY_REMOVED:46200   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+38   udp   PRIVACY_REMOVED:51728   142.251.142.131:443   br-lan     CPU   YES
+39   tcp   PRIVACY_REMOVED:50668   PRIVACY_REMOVED:443    br-lan     CPU   YES
+40   tcp   PRIVACY_REMOVED:41422   192.178.203.95:443    br-lan     CPU   YES
+41   tcp   PRIVACY_REMOVED:60650   74.125.206.188:5228   br-lan     CPU   YES
+42   tcp   PRIVACY_REMOVED:44706   34.120.237.76:443     br-lan     CPU   YES
+43   tcp   PRIVACY_REMOVED:50686   PRIVACY_REMOVED:443    br-lan     CPU   YES
+44   tcp   PRIVACY_REMOVED:44710   34.120.237.76:443     br-lan     CPU   YES
+45   tcp   PRIVACY_REMOVED:50692   PRIVACY_REMOVED:443    br-lan     CPU   YES
+46   udp   PRIVACY_REMOVED:47493   192.178.203.95:443    br-lan     CPU   YES
+47   tcp   PRIVACY_REMOVED:56308   142.251.39.163:443    br-lan     CPU   YES
+48   tcp   PRIVACY_REMOVED:33036   188.26.221.3:1081     br-lan     CPU   YES
+49   tcp   PRIVACY_REMOVED:57746   162.159.61.4:443      br-lan     CPU   YES
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:30:01 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     60
+  NSS-bypassed (CPU):    54
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     CPU   YES
+2    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+3    tcp   PRIVACY_REMOVED:50690   PRIVACY_REMOVED:443    br-lan     CPU   YES
+4    tcp   PRIVACY_REMOVED:42018   1.0.0.1:853           br-lan     CPU   YES
+5    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     CPU   YES
+6    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+7    tcp   PRIVACY_REMOVED:55276   34.107.221.82:80      br-lan     CPU   YES
+8    tcp   PRIVACY_REMOVED:56820   142.251.151.119:443   br-lan     CPU   YES
+9    tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     CPU   YES
+10   tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+11   tcp   PRIVACY_REMOVED:33034   188.26.221.3:1081     br-lan     CPU   YES
+12   tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+13   tcp   PRIVACY_REMOVED:56292   142.251.39.163:443    br-lan     CPU   YES
+14   tcp   PRIVACY_REMOVED:33038   188.26.221.3:1081     br-lan     CPU   YES
+15   tcp   PRIVACY_REMOVED:56290   142.251.39.163:443    br-lan     CPU   YES
+16   tcp   PRIVACY_REMOVED:44714   34.120.237.76:443     br-lan     CPU   YES
+17   tcp   PRIVACY_REMOVED:57766   162.159.61.4:443      br-lan     CPU   YES
+18   tcp   PRIVACY_REMOVED:56312   142.251.39.163:443    br-lan     CPU   YES
+19   tcp   PRIVACY_REMOVED:57744   162.159.61.4:443      br-lan     CPU   YES
+20   tcp   PRIVACY_REMOVED:54912   142.251.208.131:80    br-lan     CPU   YES
+21   tcp   PRIVACY_REMOVED:56238   142.251.142.131:443   br-lan     CPU   YES
+22   tcp   PRIVACY_REMOVED:42048   1.0.0.1:853           br-lan     CPU   YES
+23   tcp   PRIVACY_REMOVED:49676   151.101.1.91:443      br-lan     CPU   YES
+24   tcp   PRIVACY_REMOVED:50660   PRIVACY_REMOVED:443    br-lan     CPU   YES
+25   tcp   PRIVACY_REMOVED:56310   142.251.39.163:443    br-lan     CPU   YES
+26   tcp   PRIVACY_REMOVED:51092   142.251.154.119:443   br-lan     CPU   YES
+27   tcp   PRIVACY_REMOVED:34448   142.251.36.142:443    br-lan     CPU   YES
+28   tcp   PRIVACY_REMOVED:44712   34.120.237.76:443     br-lan     CPU   YES
+29   tcp   PRIVACY_REMOVED:41420   192.178.203.95:443    br-lan     CPU   YES
+30   tcp   PRIVACY_REMOVED:50688   PRIVACY_REMOVED:443    br-lan     CPU   YES
+31   tcp   PRIVACY_REMOVED:44704   34.120.237.76:443     br-lan     CPU   YES
+32   tcp   PRIVACY_REMOVED:33594   142.251.140.227:80    br-lan     CPU   YES
+33   tcp   PRIVACY_REMOVED:46200   PRIVACY_MAIN-ROUTE:9122      lan3       HW    NO
+34   udp   PRIVACY_REMOVED:51728   142.251.142.131:443   br-lan     CPU   YES
+35   tcp   PRIVACY_REMOVED:50668   PRIVACY_REMOVED:443    br-lan     CPU   YES
+36   tcp   PRIVACY_REMOVED:41422   192.178.203.95:443    br-lan     CPU   YES
+37   tcp   PRIVACY_REMOVED:60650   74.125.206.188:5228   br-lan     CPU   YES
+38   tcp   PRIVACY_REMOVED:44706   34.120.237.76:443     br-lan     CPU   YES
+39   tcp   PRIVACY_REMOVED:50686   PRIVACY_REMOVED:443    br-lan     CPU   YES
+40   tcp   PRIVACY_REMOVED:44710   34.120.237.76:443     br-lan     CPU   YES
+41   tcp   PRIVACY_REMOVED:50692   PRIVACY_REMOVED:443    br-lan     CPU   YES
+42   udp   PRIVACY_REMOVED:47493   192.178.203.95:443    br-lan     CPU   YES
+43   tcp   PRIVACY_REMOVED:56308   142.251.39.163:443    br-lan     CPU   YES
+44   tcp   PRIVACY_REMOVED:33036   188.26.221.3:1081     br-lan     CPU   YES
+45   tcp   PRIVACY_REMOVED:57746   162.159.61.4:443      br-lan     CPU   YES
+^C
+root@ZTE:~# nss-switch list
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+
+══ Active NSS Bypass Rules ══
+ID   PROTO SRC_IP             DST_IP             SPORT  DPORT  IFACE      PERSIST  COMMENT
+────────────────────────────────────────────────────────────────
+2    any   any                any                any    any    br-lan     yes      br-lan off NSS
+────────────────────────────────────────────────────────────────
+  Total rules:           1
+
+  Rules file:            /usr/bin/NSS-Switch/state/rules.conf
+  Firewall script:       /usr/bin/NSS-Switch/firewall.d/nss-bypass
+[ OK ]  NSS-Switch chains are live in nftables
+root@ZTE:~# nss-switch remove 2
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+
+══ Remove Rule 2 ══
+  ID:                    2
+  Proto:                 any
+  Src IP:                any
+  Dst IP:                any
+  Sport:                 any
+  Dport:                 any
+  Iface:                 br-lan
+  Comment:               br-lan off NSS
+Remove this rule? [y/N]: y
+[ OK ]  Rule 2 removed
+^[[A^[[A[ OK ]  Firewall reloaded, NSS-Switch rules applied
+[INFO]  Clearing conntrack entries for this rule...
+tcp      6 7384 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.154.119 sport=51072 dport=443 packets=24 bytes=4248 src=142.251.154.119 dst=PRIVACY_REMOVED sport=443 dport=51072 packets=37 bytes=36111 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50690 dport=443 packets=15 bytes=2885 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50690 packets=15 bytes=8496 [ASSURED] mark=65536 use=1
+tcp      6 36 TIME_WAIT src=PRIVACY_REMOVED dst=1.0.0.1 sport=42018 dport=853 packets=15 bytes=1888 src=1.0.0.1 dst=PRIVACY_REMOVED sport=853 dport=42018 packets=15 bytes=6956 [ASSURED] mark=65536 use=1
+tcp      6 7385 ESTABLISHED src=PRIVACY_REMOVED dst=151.101.1.91 sport=49690 dport=443 packets=14 bytes=3153 src=151.101.1.91 dst=PRIVACY_REMOVED sport=443 dport=49690 packets=17 bytes=11748 [ASSURED] mark=65536 use=1
+tcp      6 35 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.221.82 sport=55276 dport=80 packets=7 bytes=671 src=34.107.221.82 dst=PRIVACY_REMOVED sport=80 dport=55276 packets=5 bytes=484 [ASSURED] mark=65536 use=1
+tcp      6 35 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.151.119 sport=56820 dport=443 packets=17 bytes=5237 src=142.251.151.119 dst=PRIVACY_REMOVED sport=443 dport=56820 packets=18 bytes=3446 [ASSURED] mark=65536 use=1
+tcp      6 7391 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50650 dport=443 packets=556 bytes=34733 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50650 packets=1105 bytes=1514683 [ASSURED] mark=65536 use=1
+tcp      6 45 CLOSE_WAIT src=PRIVACY_REMOVED dst=188.26.221.3 sport=33034 dport=1081 packets=76140 bytes=113591085 src=188.26.221.3 dst=PRIVACY_REMOVED sport=1081 dport=33034 packets=7546 bytes=395672 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.39.163 sport=56292 dport=443 packets=13 bytes=2777 src=142.251.39.163 dst=PRIVACY_REMOVED sport=443 dport=56292 packets=10 bytes=6394 [ASSURED] mark=65536 use=1
+tcp      6 45 CLOSE_WAIT src=PRIVACY_REMOVED dst=188.26.221.3 sport=33038 dport=1081 packets=57682 bytes=86052458 src=188.26.221.3 dst=PRIVACY_REMOVED sport=1081 dport=33038 packets=6018 bytes=317579 [ASSURED] mark=65536 use=1
+tcp      6 7393 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.39.163 sport=56290 dport=443 packets=72 bytes=6568 src=142.251.39.163 dst=PRIVACY_REMOVED sport=443 dport=56290 packets=129 bytes=168534 [ASSURED] mark=65536 use=1
+tcp      6 64 TIME_WAIT src=PRIVACY_REMOVED dst=34.120.237.76 sport=44714 dport=443 packets=9 bytes=1191 src=34.120.237.76 dst=PRIVACY_REMOVED sport=443 dport=44714 packets=7 bytes=635 [ASSURED] mark=65536 use=1
+tcp      6 7391 ESTABLISHED src=PRIVACY_REMOVED dst=162.159.61.4 sport=57766 dport=443 packets=77 bytes=16932 src=162.159.61.4 dst=PRIVACY_REMOVED sport=443 dport=57766 packets=123 bytes=37328 [ASSURED] mark=65536 use=1
+tcp      6 71 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.39.163 sport=56312 dport=443 packets=13 bytes=3396 src=142.251.39.163 dst=PRIVACY_REMOVED sport=443 dport=56312 packets=9 bytes=2427 [ASSURED] mark=65536 use=1
+tcp      6 35 TIME_WAIT src=PRIVACY_REMOVED dst=162.159.61.4 sport=57744 dport=443 packets=19 bytes=4439 src=162.159.61.4 dst=PRIVACY_REMOVED sport=443 dport=57744 packets=17 bytes=6149 [ASSURED] mark=65536 use=1
+tcp      6 7438 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.208.131 sport=54912 dport=80 packets=10 bytes=1544 src=142.251.208.131 dst=PRIVACY_REMOVED sport=80 dport=54912 packets=5 bytes=947 [ASSURED] mark=65536 use=1
+tcp      6 63 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.142.131 sport=56238 dport=443 packets=46 bytes=4931 src=142.251.142.131 dst=PRIVACY_REMOVED sport=443 dport=56238 packets=75 bytes=93072 [ASSURED] mark=65536 use=1
+tcp      6 46 TIME_WAIT src=PRIVACY_REMOVED dst=1.0.0.1 sport=42048 dport=853 packets=11 bytes=1337 src=1.0.0.1 dst=PRIVACY_REMOVED sport=853 dport=42048 packets=9 bytes=1613 [ASSURED] mark=65536 use=1
+tcp      6 7394 ESTABLISHED src=PRIVACY_REMOVED dst=151.101.1.91 sport=49676 dport=443 packets=79 bytes=15834 src=151.101.1.91 dst=PRIVACY_REMOVED sport=443 dport=49676 packets=120 bytes=105704 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50660 dport=443 packets=15 bytes=2885 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50660 packets=15 bytes=8496 [ASSURED] mark=65536 use=1
+tcp      6 71 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.39.163 sport=56310 dport=443 packets=14 bytes=3448 src=142.251.39.163 dst=PRIVACY_REMOVED sport=443 dport=56310 packets=12 bytes=2583 [ASSURED] mark=65536 use=1
+tcp      6 65 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.154.119 sport=51092 dport=443 packets=13 bytes=2774 src=142.251.154.119 dst=PRIVACY_REMOVED sport=443 dport=51092 packets=11 bytes=6414 [ASSURED] mark=65536 use=1
+tcp      6 7386 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.36.142 sport=34448 dport=443 packets=18 bytes=2480 src=142.251.36.142 dst=PRIVACY_REMOVED sport=443 dport=34448 packets=21 bytes=14523 [ASSURED] mark=65536 use=1
+tcp      6 64 TIME_WAIT src=PRIVACY_REMOVED dst=34.120.237.76 sport=44712 dport=443 packets=9 bytes=1191 src=34.120.237.76 dst=PRIVACY_REMOVED sport=443 dport=44712 packets=7 bytes=635 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=192.178.203.95 sport=41420 dport=443 packets=18 bytes=3563 src=192.178.203.95 dst=PRIVACY_REMOVED sport=443 dport=41420 packets=23 bytes=9665 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50688 dport=443 packets=15 bytes=2885 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50688 packets=15 bytes=8474 [ASSURED] mark=65536 use=1
+tcp      6 7384 ESTABLISHED src=PRIVACY_REMOVED dst=34.120.237.76 sport=44704 dport=443 packets=30 bytes=9152 src=34.120.237.76 dst=PRIVACY_REMOVED sport=443 dport=44704 packets=35 bytes=4872 [ASSURED] mark=65536 use=1
+tcp      6 25 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.140.227 sport=33594 dport=80 packets=5 bytes=495 src=142.251.140.227 dst=PRIVACY_REMOVED sport=80 dport=33594 packets=5 bytes=414 [ASSURED] mark=65536 use=1
+udp      17 124 src=PRIVACY_REMOVED dst=142.251.142.131 sport=51728 dport=443 packets=7 bytes=4233 src=142.251.142.131 dst=PRIVACY_REMOVED sport=443 dport=51728 packets=10 bytes=8416 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50668 dport=443 packets=10 bytes=3196 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50668 packets=9 bytes=1094 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=192.178.203.95 sport=41422 dport=443 packets=13 bytes=2796 src=192.178.203.95 dst=PRIVACY_REMOVED sport=443 dport=41422 packets=9 bytes=6754 [ASSURED] mark=65536 use=1
+tcp      6 7347 ESTABLISHED src=PRIVACY_REMOVED dst=74.125.206.188 sport=60650 dport=5228 packets=8 bytes=1430 src=74.125.206.188 dst=PRIVACY_REMOVED sport=5228 dport=60650 packets=8 bytes=1284 [ASSURED] mark=65536 use=1
+tcp      6 64 TIME_WAIT src=PRIVACY_REMOVED dst=34.120.237.76 sport=44706 dport=443 packets=10 bytes=1243 src=34.120.237.76 dst=PRIVACY_REMOVED sport=443 dport=44706 packets=7 bytes=635 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50686 dport=443 packets=10 bytes=3196 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50686 packets=8 bytes=1020 [ASSURED] mark=65536 use=1
+tcp      6 64 TIME_WAIT src=PRIVACY_REMOVED dst=34.120.237.76 sport=44710 dport=443 packets=9 bytes=1191 src=34.120.237.76 dst=PRIVACY_REMOVED sport=443 dport=44710 packets=6 bytes=583 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50692 dport=443 packets=15 bytes=2885 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50692 packets=14 bytes=8422 [ASSURED] mark=65536 use=1
+udp      17 131 src=PRIVACY_REMOVED dst=192.178.203.95 sport=47493 dport=443 packets=7 bytes=4236 src=192.178.203.95 dst=PRIVACY_REMOVED sport=443 dport=47493 packets=10 bytes=8571 [ASSURED] mark=65536 use=1
+tcp      6 71 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.39.163 sport=56308 dport=443 packets=14 bytes=3448 src=142.251.39.163 dst=PRIVACY_REMOVED sport=443 dport=56308 packets=12 bytes=2583 [ASSURED] mark=65536 use=1
+tcp      6 7438 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.221.3 sport=33036 dport=1081 packets=66161 bytes=98689033 src=188.26.221.3 dst=PRIVACY_REMOVED sport=1081 dport=33036 packets=6583 bytes=354566 [ASSURED] mark=65536 use=1
+tcp      6 31 TIME_WAIT src=PRIVACY_REMOVED dst=162.159.61.4 sport=57746 dport=443 packets=15 bytes=4028 src=162.159.61.4 dst=PRIVACY_REMOVED sport=443 dport=57746 packets=14 bytes=5436 [ASSURED] mark=65536 use=1
+tcp      6 70 TIME_WAIT src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50684 dport=443 packets=10 bytes=3196 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50684 packets=8 bytes=1042 [ASSURED] mark=65536 use=1
+tcp      6 7390 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=50666 dport=443 packets=22 bytes=3502 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=443 dport=50666 packets=29 bytes=32666 [ASSURED] mark=65536 use=1
+tcp      6 7390 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.153.119 sport=54882 dport=443 packets=428 bytes=57980 src=142.251.153.119 dst=PRIVACY_REMOVED sport=443 dport=54882 packets=1090 bytes=1348285 [ASSURED] mark=65536 use=1
+tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.150.119 sport=38814 dport=443 packets=39 bytes=6706 src=142.251.150.119 dst=PRIVACY_REMOVED sport=443 dport=38814 packets=77 bytes=15094 [ASSURED] mark=65536 use=1
+tcp      6 71 TIME_WAIT src=PRIVACY_REMOVED dst=142.251.39.163 sport=56306 dport=443 packets=13 bytes=3396 src=142.251.39.163 dst=PRIVACY_REMOVED sport=443 dport=56306 packets=10 bytes=2479 [ASSURED] mark=65536 use=1
+tcp      6 7386 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.36.142 sport=34444 dport=443 packets=10 bytes=2620 src=142.251.36.142 dst=PRIVACY_REMOVED sport=443 dport=34444 packets=10 bytes=6393 [ASSURED] mark=65536 use=1
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:30:24 CEST 2026
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:30:27 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     18
+  NSS-bypassed (CPU):    1
+  NSS frontend:          NSS  engine=auto
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:30:31 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     25
+  NSS-bypassed (CPU):    1
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     HW    NO
+2    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+3    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     HW    NO
+4    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+5    tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     HW    NO
+6    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+7    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:30:35 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     31
+  NSS-bypassed (CPU):    1
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     HW    NO
+2    tcp   PRIVACY_REMOVED:33048   188.26.221.3:1081     br-lan     HW    NO
+3    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+4    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     HW    NO
+5    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+6    tcp   PRIVACY_REMOVED:33046   188.26.221.3:1081     br-lan     HW    NO
+7    tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     HW    NO
+8    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+9    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+╔═══════════════════════════════════════╗
+║         NSS-Switch  v1.0              ║
+║   Qualcomm NSS selective bypass       ║
+╚═══════════════════════════════════════╝
+Refresh: 3s  |  Press Ctrl+C to exit  |  Mon May 11 12:30:40 CEST 2026
+────────────────────────────────────────────────────────────────
+  Total connections:     31
+  NSS-bypassed (CPU):    1
+  NSS frontend:          NSS  engine=auto
+────────────────────────────────────────────────────────────────
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS
+────────────────────────────────────────────────────────────────
+1    tcp   PRIVACY_REMOVED:51072   142.251.154.119:443   br-lan     HW    NO
+2    tcp   PRIVACY_REMOVED:33048   188.26.221.3:1081     br-lan     HW    NO
+3    tcp   PRIVACY_REMOVED:47546   172.64.41.4:443       lan3       HW    NO
+4    tcp   PRIVACY_REMOVED:49690   151.101.1.91:443      br-lan     HW    NO
+5    tcp   PRIVACY_REMOVED:56756   185.105.39.3:443      lan2       HW    NO
+6    tcp   PRIVACY_REMOVED:33046   188.26.221.3:1081     br-lan     HW    NO
+7    tcp   PRIVACY_REMOVED:50650   PRIVACY_REMOVED:443    br-lan     HW    NO
+8    tcp   PRIVACY_REMOVED:57924   185.105.39.3:443      lan2       HW    NO
+9    tcp   PRIVACY_REMOVED:56250   64.233.167.95:443     lan2       HW    NO
+10   tcp   PRIVACY_REMOVED:33050   188.26.221.3:1081     br-lan     HW    NO
+11   tcp   PRIVACY_REMOVED:56290   142.251.39.163:443    br-lan     HW    NO
+^C
+root@ZTE:~#

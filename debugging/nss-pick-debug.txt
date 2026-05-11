@@ -1,0 +1,1163 @@
++ set -e
++ readlink -f /usr/bin/NSS-Switch/nss-switch.sh
++ dirname /usr/bin/NSS-Switch/nss-switch.sh
++ cd /usr/bin/NSS-Switch
++ pwd
++ SELF_DIR=/usr/bin/NSS-Switch
++ CONFIG_FILE=/usr/bin/NSS-Switch/config
++ '[' '!' -f /usr/bin/NSS-Switch/config ]
++ . /usr/bin/NSS-Switch/config
++ PERSIST_DEFAULT=no
++ NSS_MARK=0x00010000
++ NSS_MARK_MASK=0x00010000
++ ECM_DEBUGFS=/sys/kernel/debug/ecm
++ NFT_TABLE='inet fw4'
++ NFT_CHAIN_PRE=nss_bypass_pre
++ NFT_CHAIN_POST=nss_bypass_post
++ RULES_FILE=/usr/bin/NSS-Switch/state/rules.conf
++ DEBUG_LOG=/usr/bin/NSS-Switch/state/debug.log
++ FW_SCRIPT=/usr/bin/NSS-Switch/firewall.d/nss-bypass
++ WATCH_INTERVAL=3
++ DEBUG_MODE=no
++ lib_file=/usr/bin/NSS-Switch/lib/ui.sh
++ '[' '!' -f /usr/bin/NSS-Switch/lib/ui.sh ]
++ . /usr/bin/NSS-Switch/lib/ui.sh
++ '[' -t 1 ]
++ C_RED= C_GREEN= C_YELLOW= C_BLUE= C_CYAN=
++ C_BOLD= C_DIM= C_RESET=
++ lib_file=/usr/bin/NSS-Switch/lib/ecm.sh
++ '[' '!' -f /usr/bin/NSS-Switch/lib/ecm.sh ]
++ . /usr/bin/NSS-Switch/lib/ecm.sh
++ lib_file=/usr/bin/NSS-Switch/lib/conntrack.sh
++ '[' '!' -f /usr/bin/NSS-Switch/lib/conntrack.sh ]
++ . /usr/bin/NSS-Switch/lib/conntrack.sh
++ CONNTRACK_FILE=/proc/net/nf_conntrack
++ lib_file=/usr/bin/NSS-Switch/lib/nft.sh
++ '[' '!' -f /usr/bin/NSS-Switch/lib/nft.sh ]
++ . /usr/bin/NSS-Switch/lib/nft.sh
++ NFT_INCLUDE_LINK=/etc/firewall.d/nss-bypass
++ NFT_RULES_HEADER='# NSS-Switch managed rules — do not edit manually'
++ lib_file=/usr/bin/NSS-Switch/lib/detect.sh
++ '[' '!' -f /usr/bin/NSS-Switch/lib/detect.sh ]
++ . /usr/bin/NSS-Switch/lib/detect.sh
++ lib_file=/usr/bin/NSS-Switch/lib/rules.sh
++ '[' '!' -f /usr/bin/NSS-Switch/lib/rules.sh ]
++ . /usr/bin/NSS-Switch/lib/rules.sh
++ RULES_HEADER='# NSS-Switch rules — id|proto|src_ip|dst_ip|src_port|dst_port|iface|persist|comment'
++ dbg 'Invoked: /usr/bin/NSS-Switch/nss-switch.sh pick'
++ local ts
++ date '+%Y-%m-%d %H:%M:%S'
++ ts='2026-05-11 03:58:35'
++ '[' 0 '=' 1 ]
++ '[' no '=' yes ]
++ printf '%s [DBG] %s\n' '2026-05-11 03:58:35' 'Invoked: /usr/bin/NSS-Switch/nss-switch.sh pick'
++ COMMAND=pick
++ shift
++ cmd_pick
++ check_root
++ id -u
++ '[' 0 '=' 0 ]
++ ui_banner
++ printf 
++ printf '╔═══════════════════════════════════════╗\n'
+╔═══════════════════════════════════════╗
++ printf '║         NSS-Switch  v1.0              ║\n'
+║         NSS-Switch  v1.0              ║
++ printf '║   Qualcomm NSS selective bypass       ║\n'
+║   Qualcomm NSS selective bypass       ║
++ printf '╚═══════════════════════════════════════╝\n'
+╚═══════════════════════════════════════╝
++ printf 
++ ui_section 'Connection Picker — Select a connection to bypass NSS'
++ printf '\n══ %s ══\n' 'Connection Picker — Select a connection to bypass NSS'
+
+══ Connection Picker — Select a connection to bypass NSS ══
++ local tmpfile
++ mktemp /tmp/nss-switch-pick.XXXXXX
++ tmpfile=/tmp/nss-switch-pick.kGPnGc
++ ct_dump_all
++ ct_check
++ '[' -f /proc/net/nf_conntrack ]
++ local 'num=0'
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'src=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ + cutgrep -oE '-d=' 'dst=[^ ]+' -f2
+
++ CT_DST=188.26.192.1
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SPORT=43626
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ + grepcut -oE '-d=' 'dport=[^ ]+' -f2
+
++ CT_DPORT=443
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ cut '-d=' -f2
++ grep -oE 'mark=[^ ]+'
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 7388 ESTABLISHED src=PRIVACY_REMOVED dst=188.26.192.1 sport=43626 dport=443 packets=2123 bytes=150894 src=188.26.192.1 dst=PRIVACY_REMOVED sport=443 dport=43626 packets=5341 bytes=7688927 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ + grepcut -oE '-d=' 'status=[^ ]+' -f2
+
++ CT_STATUS=
++ CT_SPORT=43626
++ CT_DPORT=443
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=1
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=lan2
++ '[' -z lan2 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:43626'
++ local 'dst_str=188.26.192.1:443'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 1 tcp PRIVACY_REMOVED:43626 188.26.192.1:443 lan2 HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ grep -oE 'src=[^ ]+'
++ cut '-d=' -f2
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DST=185.105.37.229
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SPORT=52736
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DPORT=443
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 7437 ESTABLISHED src=PRIVACY_REMOVED dst=185.105.37.229 sport=52736 dport=443 packets=20518 bytes=1412222 src=185.105.37.229 dst=PRIVACY_REMOVED sport=443 dport=52736 packets=73700 bytes=108881645 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'status=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_STATUS=
++ CT_SPORT=52736
++ CT_DPORT=443
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=2
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=lan2
++ '[' -z lan2 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:52736'
++ local 'dst_str=185.105.37.229:443'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 2 tcp PRIVACY_REMOVED:52736 185.105.37.229:443 lan2 HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ cut '-d=' -f2
++ grep -oE 'src=[^ ]+'
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DST=34.107.243.93
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SPORT=55738
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dport=[^ ]+'
++ + head -1cut
+ '-d=' -f2
++ CT_DPORT=443
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 16 TIME_WAIT src=PRIVACY_REMOVED dst=34.107.243.93 sport=55738 dport=443 packets=16 bytes=3845 src=34.107.243.93 dst=PRIVACY_REMOVED sport=443 dport=55738 packets=13 bytes=1831 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'status=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_STATUS=
++ CT_SPORT=55738
++ CT_DPORT=443
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=3
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ + head -1
+grep -oE 'dev [^ ]+'
++ awk '{print $2}'
++ iface=lan3
++ '[' -z lan3 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:55738'
++ local 'dst_str=34.107.243.93:443'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 3 tcp PRIVACY_REMOVED:55738 34.107.243.93:443 lan3 HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'src=[^ ]+'
++ + headcut -1 '-d='
+ -f2
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ + head -1cut
+ '-d=' -f2
++ CT_DST=3.173.21.63
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SPORT=36418
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DPORT=443
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 18 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36418 dport=443 packets=34 bytes=5837 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36418 packets=38 bytes=18414 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ cut+  '-d=' -f2grep -oE
+ 'status=[^ ]+'
++ CT_STATUS=
++ CT_SPORT=36418
++ CT_DPORT=443
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=4
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=lan3
++ '[' -z lan3 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:36418'
++ local 'dst_str=3.173.21.63:443'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 4 tcp PRIVACY_REMOVED:36418 3.173.21.63:443 lan3 HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ grep -oE 'src=[^ ]+'
++ cut '-d=' -f2
++ CT_SRC=PRIVACY_REMOVED28
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DST=142.250.110.188
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SPORT=60702
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DPORT=5228
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 6937 ESTABLISHED src=PRIVACY_REMOVED28 dst=142.250.110.188 sport=60702 dport=5228 packets=23 bytes=2650 src=142.250.110.188 dst=PRIVACY_REMOVED sport=5228 dport=60702 packets=22 bytes=13464 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'status=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_STATUS=
++ CT_SPORT=60702
++ CT_DPORT=5228
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED28 ]
++ num=5
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED28
++ local 'src=PRIVACY_REMOVED28'
++ ip route get PRIVACY_REMOVED28
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=br-lan
++ '[' -z br-lan ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED28:60702'
++ local 'dst_str=142.250.110.188:5228'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 5 tcp PRIVACY_REMOVED28:60702 142.250.110.188:5228 br-lan HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'src=[^ ]+'
++ + headcut -1 '-d='
+ -f2
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ cut '-d=' -f2
++ head -1
++ CT_DST=3.173.21.63
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ + cuthead '-d=' -1 -f2
+
++ CT_SPORT=36402
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DPORT=443
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 13 TIME_WAIT src=PRIVACY_REMOVED dst=3.173.21.63 sport=36402 dport=443 packets=19 bytes=4391 src=3.173.21.63 dst=PRIVACY_REMOVED sport=443 dport=36402 packets=17 bytes=3991 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'status=[^ ]+'
++ + headcut -1 '-d='
+ -f2
++ CT_STATUS=
++ CT_SPORT=36402
++ CT_DPORT=443
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=6
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=lan3
++ '[' -z lan3 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:36402'
++ local 'dst_str=3.173.21.63:443'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 6 tcp PRIVACY_REMOVED:36402 3.173.21.63:443 lan3 HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'src=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DST=108.156.46.58
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ cut '-d=' -f2
++ grep -oE 'sport=[^ ]+'
++ CT_SPORT=39784
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DPORT=443
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 7373 ESTABLISHED src=PRIVACY_REMOVED dst=108.156.46.58 sport=39784 dport=443 packets=19 bytes=2540 src=108.156.46.58 dst=PRIVACY_REMOVED sport=443 dport=39784 packets=29 bytes=31628 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'status=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_STATUS=
++ CT_SPORT=39784
++ CT_DPORT=443
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=7
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=lan2
++ '[' -z lan2 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:39784'
++ local 'dst_str=108.156.46.58:443'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 7 tcp PRIVACY_REMOVED:39784 108.156.46.58:443 lan2 HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'src=[^ ]+'
++ + cuthead '-d=' -1 -f2
+
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DST=151.101.193.91
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ + headcut -1 '-d='
+ -f2
++ CT_SPORT=58246
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ head -1
++ cut '-d=' -f2
++ grep -oE 'dport=[^ ]+'
++ CT_DPORT=443
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ + headcut -1 '-d='
+ -f2
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 1 CLOSE src=PRIVACY_REMOVED dst=151.101.193.91 sport=58246 dport=443 packets=43 bytes=9484 src=151.101.193.91 dst=PRIVACY_REMOVED sport=443 dport=58246 packets=57 bytes=38692 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'status=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_STATUS=
++ CT_SPORT=58246
++ CT_DPORT=443
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=8
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=lan3
++ '[' -z lan3 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:58246'
++ local 'dst_str=151.101.193.91:443'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 8 tcp PRIVACY_REMOVED:58246 151.101.193.91:443 lan3 HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'src=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DST=142.251.142.142
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SPORT=57204
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dport=[^ ]+'
++ + cuthead '-d=' -1 -f2
+
++ CT_DPORT=443
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ + cuthead -1 '-d=' -f2
+
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 7371 ESTABLISHED src=PRIVACY_REMOVED dst=142.251.142.142 sport=57204 dport=443 packets=139 bytes=47827 src=142.251.142.142 dst=PRIVACY_REMOVED sport=443 dport=57204 packets=258 bytes=302368 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'status=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_STATUS=
++ CT_SPORT=57204
++ CT_DPORT=443
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=9
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=lan2
++ '[' -z lan2 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:57204'
++ local 'dst_str=142.251.142.142:443'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 9 tcp PRIVACY_REMOVED:57204 142.251.142.142:443 lan2 HW NO 0 6
++ IFS= read -r line
++ local l3
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $1}'
++ l3=ipv4
++ '[' ipv4 '=' ipv6 ]
++ ct_parse_line 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ local 'line=ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ CT_PROTO=
++ CT_SRC= CT_SPORT= CT_DST= CT_DPORT=
++ CT_MARK=0 CT_STATE= CT_STATUS=
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $3}'
++ CT_PROTO=tcp
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ awk '{print $4}'
++ CT_STATE=6
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'src=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SRC=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dst=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DST=PRIVACY_REMOVED
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'sport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_SPORT=57326
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'dport=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_DPORT=9122
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'mark=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_MARK=0
++ echo 'ipv4     2 tcp      6 7440 ESTABLISHED src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=57326 dport=9122 packets=1124 bytes=71545 src=PRIVACY_REMOVED dst=PRIVACY_REMOVED sport=9122 dport=57326 packets=897 bytes=131934 [ASSURED] mark=0 zone=0 use=2'
++ grep -oE 'status=[^ ]+'
++ head -1
++ cut '-d=' -f2
++ CT_STATUS=
++ CT_SPORT=57326
++ CT_DPORT=9122
++ CT_MARK=0
++ '[' -z PRIVACY_REMOVED ]
++ num=10
++ local iface
++ ct_iface_for_src PRIVACY_REMOVED
++ local 'src=PRIVACY_REMOVED'
++ ip route get PRIVACY_REMOVED
++ grep -oE 'dev [^ ]+'
++ head -1
++ awk '{print $2}'
++ iface=lan3
++ '[' -z lan3 ]
++ local nss_status
++ ct_nss_status 0
++ local 'mark=0'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ '[' -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]
++ echo HW
++ nss_status=HW
++ local 'bypassed=NO'
++ ct_is_bypassed 0
++ local 'mark=0'
++ local mark_dec
++ printf '%d' 0
++ mark_dec=0
++ local nss_dec
++ printf '%d' 0x00010000
++ nss_dec=65536
++ '[' 0 -ne 0 ]
++ local 'src_str=PRIVACY_REMOVED:57326'
++ local 'dst_str=PRIVACY_REMOVED:9122'
++ printf '%d|%s|%s|%s|%s|%s|%s|%s|%s\n' 10 tcp PRIVACY_REMOVED:57326 PRIVACY_REMOVED:9122 lan3 HW NO 0 6
++ IFS= read -r line
++ local total
++ wc -l
++ total=10
++ '[' 10 -eq 0 ]
++ ui_conn_header
++ printf 
++ printf '%-4s %-5s %-21s %-21s %-10s %-5s %-8s\n' NUM PROTO SRC DST IFACE_IN NSS BYPASS
+NUM  PROTO SRC                   DST                   IFACE_IN   NSS   BYPASS  
++ printf 
++ ui_sep
++ printf '────────────────────────────────────────────────────────────────\n'
+────────────────────────────────────────────────────────────────
++ awk '-F|' '{
+        src=substr($3,1,21); dst=substr($4,1,21)
+        printf "%-4s %-5s %-21s %-21s %-10s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
+    }' /tmp/nss-switch-pick.kGPnGc
+1    tcp   PRIVACY_REMOVED:43626   188.26.192.1:443      lan2       HW    NO
+2    tcp   PRIVACY_REMOVED:52736   185.105.37.229:443    lan2       HW    NO
+3    tcp   PRIVACY_REMOVED:55738   34.107.243.93:443     lan3       HW    NO
+4    tcp   PRIVACY_REMOVED:36418   3.173.21.63:443       lan3       HW    NO
+5    tcp   PRIVACY_REMOVED28:60702   142.250.110.188:5228  br-lan     HW    NO
+6    tcp   PRIVACY_REMOVED:36402   3.173.21.63:443       lan3       HW    NO
+7    tcp   PRIVACY_REMOVED:39784   108.156.46.58:443     lan2       HW    NO
+8    tcp   PRIVACY_REMOVED:58246   151.101.193.91:443    lan3       HW    NO
+9    tcp   PRIVACY_REMOVED:57204   142.251.142.142:443   lan2       HW    NO
+10   tcp   PRIVACY_REMOVED:57326   PRIVACY_REMOVED:9122      lan3       HW    NO
++ ui_sep
++ printf '────────────────────────────────────────────────────────────────\n'
+────────────────────────────────────────────────────────────────
++ ui_ask_num 'Select connection number to configure' 1 10
++ local 'question=Select connection number to configure' 'min=1' 'max=10'
++ printf '%s [%d-%d]: ' 'Select connection number to configure' 1 10
+Select connection number to configure [1-10]: + read -r UI_NUM
++ echo 1
++ grep -qE '^[0-9]+$'
++ '[' 1 -lt 1 ]
++ '[' 1 -gt 10 ]
++ return 0
++ local 'sel=1'
++ local conn_line
++ awk '-F|' -v 'n=1' '$1==n {print; exit}' /tmp/nss-switch-pick.kGPnGc
++ conn_line='1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ rm -f /tmp/nss-switch-pick.kGPnGc
++ '[' -z '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6' ]
++ local num proto src dst iface nss bypass mark state
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f1
++ num=1
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f2
++ proto=tcp
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f3
++ src=PRIVACY_REMOVED:43626
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f4
++ dst=188.26.192.1:443
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f5
++ iface=lan2
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f6
++ nss=HW
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f7
++ bypass=NO
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f8
++ mark=0
++ echo '1|tcp|PRIVACY_REMOVED:43626|188.26.192.1:443|lan2|HW|NO|0|6'
++ cut '-d|' -f9
++ state=6
++ local src_ip src_port dst_ip dst_port
++ echo PRIVACY_REMOVED:43626
++ cut -d: -f1
++ src_ip=PRIVACY_REMOVED
++ echo PRIVACY_REMOVED:43626
++ cut -d: -f2
++ src_port=43626
++ echo 188.26.192.1:443
++ cut -d: -f1
++ dst_ip=188.26.192.1
++ echo 188.26.192.1:443
++ cut -d: -f2
++ dst_port=443
++ ui_section 'Selected Connection'
++ printf '\n══ %s ══\n' 'Selected Connection'
+
+══ Selected Connection ══
++ ui_kv Protocol tcp
++ printf '  %-22s %s\n' Protocol: tcp
+  Protocol:              tcp
++ ui_kv Source 'PRIVACY_REMOVED : 43626'
++ printf '  %-22s %s\n' Source: 'PRIVACY_REMOVED : 43626'
+  Source:                PRIVACY_REMOVED : 43626
++ ui_kv Dest '188.26.192.1 : 443'
++ printf '  %-22s %s\n' Dest: '188.26.192.1 : 443'
+  Dest:                  188.26.192.1 : 443
++ ui_kv Interface lan2
++ printf '  %-22s %s\n' Interface: lan2
+  Interface:             lan2
++ ui_kv 'NSS state' HW
++ printf '  %-22s %s\n' 'NSS state:' HW
+  NSS state:             HW
++ ui_kv Bypassed NO
++ printf '  %-22s %s\n' Bypassed: NO
+  Bypassed:              NO
++ ui_sep
++ printf '────────────────────────────────────────────────────────────────\n'
+────────────────────────────────────────────────────────────────
++ ui_section 'What should the bypass rule match on?'
++ printf '\n══ %s ══\n' 'What should the bypass rule match on?'
+
+══ What should the bypass rule match on? ══
++ ui_bold 'You can combine multiple criteria. Answer each:'
++ printf '%s\n' 'You can combine multiple criteria. Answer each:'
+You can combine multiple criteria. Answer each:
++ printf '\n'
+
++ local 'r_proto=any' 'r_src_ip=any' 'r_dst_ip=any'
++ local 'r_sport=any' 'r_dport=any' 'r_iface=any'
++ ui_ask_yn 'Match on protocol (tcp)?' y
++ local 'question=Match on protocol (tcp)?' 'default=y'
++ local hint ans
++ hint='[Y/n]'
++ printf '%s %s: ' 'Match on protocol (tcp)?' '[Y/n]'
+Match on protocol (tcp)? [Y/n]: + read -r ans
++ '[' -z n ]
++ return 1
++ ui_ask_yn 'Match on source IP (PRIVACY_REMOVED)?' n
++ local 'question=Match on source IP (PRIVACY_REMOVED)?' 'default=n'
++ local hint ans
++ hint='[y/N]'
++ printf '%s %s: ' 'Match on source IP (PRIVACY_REMOVED)?' '[y/N]'
+Match on source IP (PRIVACY_REMOVED)? [y/N]: + read -r ans
++ '[' -z n ]
++ return 1
++ ui_ask_yn 'Match on destination IP (188.26.192.1)?' n
++ local 'question=Match on destination IP (188.26.192.1)?' 'default=n'
++ local hint ans
++ hint='[y/N]'
++ printf '%s %s: ' 'Match on destination IP (188.26.192.1)?' '[y/N]'
+Match on destination IP (188.26.192.1)? [y/N]: + read -r ans
++ '[' -z n ]
++ return 1
++ '[' tcp '=' tcp ]
++ ui_ask_yn 'Match on source port (43626)?' n
++ local 'question=Match on source port (43626)?' 'default=n'
++ local hint ans
++ hint='[y/N]'
++ printf '%s %s: ' 'Match on source port (43626)?' '[y/N]'
+Match on source port (43626)? [y/N]: + read -r ans
++ '[' -z n ]
++ return 1
++ ui_ask_yn 'Match on destination port (443)?' n
++ local 'question=Match on destination port (443)?' 'default=n'
++ local hint ans
++ hint='[y/N]'
++ printf '%s %s: ' 'Match on destination port (443)?' '[y/N]'
+Match on destination port (443)? [y/N]: + read -r ans
++ '[' -z n ]
++ return 1
++ '[' lan2 '!=' '?' ]
++ '[' -n lan2 ]
++ ui_ask_yn 'Match on interface (lan2)?' n
++ local 'question=Match on interface (lan2)?' 'default=n'
++ local hint ans
++ hint='[y/N]'
++ printf '%s %s: ' 'Match on interface (lan2)?' '[y/N]'
+Match on interface (lan2)? [y/N]: + read -r ans
++ '[' -z y ]
++ return 0
++ r_iface=lan2
++ local 'persist=no'
++ '[' no '=' yes ]
++ echo n
++ ui_ask_yn 'Make this rule persistent (survive reboot)?' n
++ local 'question=Make this rule persistent (survive reboot)?' 'default=n'
++ local hint ans
++ hint='[y/N]'
++ printf '%s %s: ' 'Make this rule persistent (survive reboot)?' '[y/N]'
+Make this rule persistent (survive reboot)? [y/N]: + read -r ans
++ '[' -z y ]
++ return 0
++ persist=yes
++ ui_ask_input 'Comment for this rule' 'bypass from pick: PRIVACY_REMOVED:43626 -> 188.26.192.1:443'
++ local 'question=Comment for this rule' 'default=bypass from pick: PRIVACY_REMOVED:43626 -> 188.26.192.1:443'
++ '[' -n 'bypass from pick: PRIVACY_REMOVED:43626 -> 188.26.192.1:443' ]
++ printf '%s [%s]: ' 'Comment for this rule' 'bypass from pick: PRIVACY_REMOVED:43626 -> 188.26.192.1:443'
+Comment for this rule [bypass from pick: PRIVACY_REMOVED:43626 -> 188.26.192.1:443]: + read -r UI_INPUT
++ '[' -z 'test 2' ]

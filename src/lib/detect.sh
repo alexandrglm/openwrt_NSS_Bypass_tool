@@ -133,7 +133,6 @@ detect_check_all() {
     if [ -f "$RULES_FILE" ]; then
         local rule_count
         rule_count=$(grep -cv -e '^#' -e '^$' "$RULES_FILE" 2>/dev/null)
-        rule_count=$(grep -cv -e '^#' -e '^$' "$RULES_FILE" 2>/dev/null)
         ui_kv "Rules file" "$RULES_FILE"
         ui_kv "Active rules" "$rule_count"
     else
