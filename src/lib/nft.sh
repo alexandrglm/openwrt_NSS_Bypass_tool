@@ -81,7 +81,18 @@ _nft_emit_rule() {
     local src_port="$5" dst_port="$6" iface="$7" comment="$8"
     local match=""
 
-    [ "$iface"    != "any" ] && match="${match} iifname \"${iface}\""
+
+    if [ "$iface" != "any" ]; then
+        case "$iface" in
+            out:*)
+                local out_iface="${iface#out:}"
+                match="${match} oifname \"${out_iface}\""
+                ;;
+            *)
+                match="${match} iifname \"${iface}\""
+                ;;
+        esac
+    fi
     [ "$proto"    != "any" ] && match="${match} meta l4proto ${proto}"
     [ "$src_ip"   != "any" ] && match="${match} ip saddr ${src_ip}"
     [ "$dst_ip"   != "any" ] && match="${match} ip daddr ${dst_ip}"
@@ -186,5 +197,8 @@ nft_validate_proto() {
 
 nft_validate_iface() {
     [ "$1" = "any" ] && return 0
-    ip link show "$1" >/dev/null 2>&1
+    case "$1" in
+        out:*) ip link show "${1#out:}" >/dev/null 2>&1 ;;
+        *)     ip link show "$1" >/dev/null 2>&1 ;;
+    esac
 }

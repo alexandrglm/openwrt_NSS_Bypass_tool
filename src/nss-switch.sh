@@ -70,12 +70,12 @@ cmd_watch() {
 
         ui_conn_header
         local num=0
-        ct_dump_all | while IFS='|' read -r n proto src dst iface nss bypass mark state; do
+        ct_dump_all_full | while IFS='|' read -r n proto src dst iface nss bypass mark state; do
             num=$((num+1))
             # Truncate long addresses for display
             local src_short dst_short
-            src_short=$(echo "$src" | cut -c1-21)
-            dst_short=$(echo "$dst" | cut -c1-21)
+            src_short=$(echo "$src" | cut -c1-32)
+            dst_short=$(echo "$dst" | cut -c1-32)
             ui_conn_row "$n" "$proto" "$src_short" "$dst_short" "$iface" "$nss" "$bypass"
         done
 
@@ -92,7 +92,7 @@ cmd_pick() {
 
     local tmpfile
     tmpfile=$(mktemp /tmp/nss-switch-pick.XXXXXX)
-    ct_dump_all > "$tmpfile"
+    ct_dump_all_full > "$tmpfile"
 
     local total
     total=$(wc -l < "$tmpfile")
@@ -105,8 +105,8 @@ cmd_pick() {
     # Display — awk evita redireccion de stdin
     ui_conn_header
     awk -F'|' '{
-        src=substr($3,1,21); dst=substr($4,1,21)
-        printf "%-4s %-5s %-21s %-21s %-10s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
+        src=substr($3,1,40); dst=substr($4,1,40)
+        printf "%-4s %-6s %-36s %-36s %-17s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
     }' "$tmpfile"
     ui_sep
 
@@ -182,9 +182,20 @@ cmd_pick() {
         fi
     fi
     if [ "$iface" != "?" ] && [ -n "$iface" ]; then
-        if ui_ask_yn "Match on interface ($iface)?" n; then
-            r_iface="$iface"
-        fi
+        case "$iface" in
+            local:*)
+                local real_iface="${iface#local:}"
+                ui_warn "Router-generated traffic (not a LAN device)"
+                if ui_ask_yn "Match by output interface ($real_iface)?" y; then
+                    r_iface="out:$real_iface"
+                fi
+                ;;
+            *)
+                if ui_ask_yn "Match on interface ($iface)?" n; then
+                    r_iface="$iface"
+                fi
+                ;;
+        esac
     fi
 
     local persist="$PERSIST_DEFAULT"

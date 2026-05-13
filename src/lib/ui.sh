@@ -38,13 +38,13 @@ ui_banner() {
 
 # ─── Separator ────────────────────────────────────────────────────────────────
 ui_sep() {
-    printf "${C_DIM}────────────────────────────────────────────────────────────────${C_RESET}\n"
+    printf "${C_DIM}─────────────────────────────────────────────────────────────────────────────────────────${C_RESET}\n"
 }
 
 # ─── Table header for connection watch ───────────────────────────────────────
 ui_conn_header() {
     printf "${C_BOLD}"
-    printf "%-4s %-5s %-21s %-21s %-10s %-5s %-8s\n" \
+    printf "%-4s %-6s %-36s %-36s %-17s %-5s %-8s\n" \
         "NUM" "PROTO" "SRC" "DST" "IFACE_IN" "NSS" "BYPASS"
     printf "${C_RESET}"
     ui_sep
@@ -65,7 +65,7 @@ ui_conn_row() {
     esac
     [ "$bypass" = "YES" ] && byp_color="$C_YELLOW"
 
-    printf "%-4s %-5s %-21s %-21s %-10s ${nss_color}%-5s${C_RESET} ${byp_color}%-8s${C_RESET}\n" \
+    printf "%-4s %-6s %-36s %-36s %-17s ${nss_color}%-5s${C_RESET} ${byp_color}%-8s${C_RESET}\n" \
         "$num" "$proto" "$src" "$dst" "$iface" "$nss" "$bypass"
 }
 

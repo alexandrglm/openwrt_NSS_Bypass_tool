@@ -9,8 +9,251 @@ ct_check() {
     [ -f "$CONNTRACK_FILE" ] || { ui_error "conntrack not available"; return 1; }
 }
 
-# ─── Clear A rule handling with type of: iface? port? ip? protocol    ─────────────────────────────────────────────
+# ─── IP to decimal ────────────────────────────────────────────────────────────
+_ip_to_dec() {
+    local ip="$1"
+    local a b c d
+    a=$(echo "$ip" | cut -d'.' -f1)
+    b=$(echo "$ip" | cut -d'.' -f2)
+    c=$(echo "$ip" | cut -d'.' -f3)
+    d=$(echo "$ip" | cut -d'.' -f4)
+    echo $(( (a<<24) + (b<<16) + (c<<8) + d ))
+}
 
+# ─── Check if IP is in CIDR ───────────────────────────────────────────────────
+_ct_ip_in_cidr() {
+    local ip="$1" cidr="$2"
+    local net prefix
+    net=$(echo "$cidr" | cut -d'/' -f1)
+    prefix=$(echo "$cidr" | cut -d'/' -f2)
+    local ip_dec net_dec mask_dec
+    ip_dec=$(_ip_to_dec "$ip")
+    net_dec=$(_ip_to_dec "$net")
+    if [ "$prefix" -eq 0 ]; then
+        mask_dec=0
+    else
+        mask_dec=$(( ( (1<<31) | ( (1<<31)-1 ) ) ^ ( (1<<(32-prefix))-1 ) ))
+    fi
+    [ $(( ip_dec & mask_dec )) -eq $(( net_dec & mask_dec )) ]
+}
+
+# ─── Build interface map from ip addr show ────────────────────────────────────
+# Writes to a tmpfile: "ip cidr iface" per line
+_ct_build_iface_map() {
+    local tmpfile="$1"
+    ip addr show 2>/dev/null | awk '
+        /^[0-9]+: / { iface=$2; gsub(/:$/,"",iface) }
+        /inet / {
+            if ($0 ~ /peer/) {
+                print $2, $2"/32", iface
+            } else {
+                split($2, a, "/")
+                print a[1], $2, iface
+            }
+        }
+    ' > "$tmpfile"
+}
+
+# ─── Get interface for a src IP ───────────────────────────────────────────────
+# Returns: iface name, "local:iface" for router-own IPs, or "?"
+ct_iface_for_src() {
+    local src="$1"
+    local found=""
+    local tmp
+    tmp=$(mktemp /tmp/nss-iface.XXXXXX)
+    _ct_build_iface_map "$tmp"
+
+    while IFS=' ' read -r ip cidr iface; do
+        if [ "$src" = "$ip" ]; then
+            rm -f "$tmp"
+            echo "local:$iface"
+            return
+        fi
+        if _ct_ip_in_cidr "$src" "$cidr" 2>/dev/null; then
+            found="$iface"
+        fi
+    done < "$tmp"
+
+    rm -f "$tmp"
+    [ -n "$found" ] && echo "$found" && return
+    echo "?"
+}
+
+# ─── Parse one conntrack line into variables ──────────────────────────────────
+# Sets: CT_PROTO CT_SRC CT_SPORT CT_DST CT_DPORT CT_MARK CT_STATE CT_STATUS
+ct_parse_line() {
+    local line="$1"
+    CT_PROTO=""
+    CT_SRC="" CT_SPORT="" CT_DST="" CT_DPORT=""
+    CT_MARK=0 CT_STATE="" CT_STATUS=""
+
+    CT_PROTO=$(echo "$line" | awk '{print $3}')
+
+    case "$CT_PROTO" in
+        tcp|6)   CT_STATE=$(echo "$line" | awk '{print $4}') ;;
+        udp|17)  CT_STATE="stateless" ;;
+        *)       CT_STATE="?" ;;
+    esac
+
+    CT_SRC=$(echo "$line"   | grep -oE 'src=[^ ]+' | head -1 | cut -d= -f2)
+    CT_DST=$(echo "$line"   | grep -oE 'dst=[^ ]+' | head -1 | cut -d= -f2)
+    CT_SPORT=$(echo "$line" | grep -oE 'sport=[^ ]+' | head -1 | cut -d= -f2)
+    CT_DPORT=$(echo "$line" | grep -oE 'dport=[^ ]+' | head -1 | cut -d= -f2)
+    CT_MARK=$(echo "$line"  | grep -oE 'mark=[^ ]+' | head -1 | cut -d= -f2)
+    CT_STATUS=$(echo "$line"| grep -oE 'status=[^ ]+' | head -1 | cut -d= -f2)
+
+    CT_SPORT="${CT_SPORT:-?}"
+    CT_DPORT="${CT_DPORT:-?}"
+    CT_MARK="${CT_MARK:-0}"
+}
+
+# ─── Check if mark has our NSS bypass bit set ─────────────────────────────────
+ct_is_bypassed() {
+    local mark="$1"
+    local mark_dec nss_dec
+    mark_dec=$(printf '%d' "$mark" 2>/dev/null) || mark_dec=0
+    nss_dec=$(printf '%d' "$NSS_MARK" 2>/dev/null) || nss_dec=65536
+    [ $(( mark_dec & nss_dec )) -ne 0 ]
+}
+
+# ─── Determine NSS status for a connection ────────────────────────────────────
+ct_nss_status() {
+    local mark="$1"
+    if ct_is_bypassed "$mark"; then
+        echo "CPU"
+        return
+    fi
+    if [ -d "$ECM_DEBUGFS/ecm_nss_ipv4" ]; then
+        echo "HW"
+    elif [ -d "$ECM_DEBUGFS/ecm_sfe_ipv4" ]; then
+        echo "SFE"
+    else
+        echo "CPU"
+    fi
+}
+
+# ─── Dump all connections as structured records ───────────────────────────────
+# Output format: NUM|PROTO|SRC:SPORT|DST:DPORT|IFACE|NSS|BYPASS|MARK|STATE
+# Filters out router-local connections (local:*) — use ct_dump_all_full for those
+ct_dump_all() {
+    ct_check || return 1
+
+    # Build iface map once for performance
+    local ifmap
+    ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
+    _ct_build_iface_map "$ifmap"
+
+    local num=0
+    while IFS= read -r line; do
+        ct_parse_line "$line"
+        [ -z "$CT_SRC" ] && continue
+
+        # Resolve interface
+        local iface found=""
+        while IFS=' ' read -r ip cidr if2; do
+            if [ "$CT_SRC" = "$ip" ]; then
+                found="local:$if2"
+                break
+            fi
+            if _ct_ip_in_cidr "$CT_SRC" "$cidr" 2>/dev/null; then
+                found="$if2"
+            fi
+        done < "$ifmap"
+        [ -z "$found" ] && found="?"
+        iface="$found"
+
+        # Skip router-local connections from normal dump
+        case "$iface" in local:*) continue ;; esac
+        [ "$iface" = "?" ] && continue
+
+        num=$((num+1))
+        local nss_status bypassed
+        nss_status=$(ct_nss_status "$CT_MARK")
+        bypassed="NO"
+        ct_is_bypassed "$CT_MARK" && bypassed="YES"
+
+        printf "%d|%s|%s:%s|%s:%s|%s|%s|%s|%s|%s\n" \
+            "$num" "$CT_PROTO" \
+            "$CT_SRC" "$CT_SPORT" \
+            "$CT_DST" "$CT_DPORT" \
+            "$iface" "$nss_status" "$bypassed" \
+            "$CT_MARK" "$CT_STATE"
+    done < "$CONNTRACK_FILE"
+
+    rm -f "$ifmap"
+}
+
+# ─── Dump ALL connections including router-local ──────────────────────────────
+# Output format: NUM|PROTO|SRC:SPORT|DST:DPORT|IFACE|NSS|BYPASS|MARK|STATE
+# IFACE will show "local:pppoe-wan", "local:br-lan" etc for router traffic
+ct_dump_all_full() {
+    ct_check || return 1
+
+    local ifmap
+    ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
+    _ct_build_iface_map "$ifmap"
+
+    local num=0
+    while IFS= read -r line; do
+        ct_parse_line "$line"
+        [ -z "$CT_SRC" ] && continue
+
+        local iface found=""
+        while IFS=' ' read -r ip cidr if2; do
+            if [ "$CT_SRC" = "$ip" ]; then
+                found="local:$if2"
+                break
+            fi
+            if _ct_ip_in_cidr "$CT_SRC" "$cidr" 2>/dev/null; then
+                found="$if2"
+            fi
+        done < "$ifmap"
+        [ -z "$found" ] && found="?"
+        iface="$found"
+
+        num=$((num+1))
+        local nss_status bypassed
+        nss_status=$(ct_nss_status "$CT_MARK")
+        bypassed="NO"
+        ct_is_bypassed "$CT_MARK" && bypassed="YES"
+
+        printf "%d|%s|%s:%s|%s:%s|%s|%s|%s|%s|%s\n" \
+            "$num" "$CT_PROTO" \
+            "$CT_SRC" "$CT_SPORT" \
+            "$CT_DST" "$CT_DPORT" \
+            "$iface" "$nss_status" "$bypassed" \
+            "$CT_MARK" "$CT_STATE"
+    done < "$CONNTRACK_FILE"
+
+    rm -f "$ifmap"
+}
+
+# ─── Get single connection by NUM ─────────────────────────────────────────────
+ct_get_by_num() {
+    local target="$1"
+    ct_dump_all | awk -F'|' -v n="$target" '$1==n {print; exit}'
+}
+
+# ─── Count total connections ──────────────────────────────────────────────────
+ct_count() {
+    wc -l < "$CONNTRACK_FILE" 2>/dev/null || echo 0
+}
+
+# ─── Count bypassed connections ───────────────────────────────────────────────
+ct_count_bypassed() {
+    local nss_dec
+    nss_dec=$(printf '%d' "$NSS_MARK" 2>/dev/null) || nss_dec=65536
+    local count=0
+    while IFS= read -r line; do
+        local mark mark_dec
+        mark=$(echo "$line" | grep -oE 'mark=[^ ]+' | head -1 | cut -d= -f2)
+        mark_dec=$(printf '%d' "${mark:-0}" 2>/dev/null) || mark_dec=0
+        [ $(( mark_dec & nss_dec )) -ne 0 ] && count=$((count+1))
+    done < "$CONNTRACK_FILE"
+    echo "$count"
+}
+
+# ─── Clear conntrack entries matching rule criteria ───────────────────────────
 ct_clear_rule_marks() {
     local proto="$1" src_ip="$2" dst_ip="$3"
     local sport="$4" dport="$5" iface="$6"
@@ -20,21 +263,26 @@ ct_clear_rule_marks() {
     [ "$src_ip" != "any" ] && args="$args -s $src_ip"
     [ "$dst_ip" != "any" ] && args="$args -d $dst_ip"
 
-    # iface → obtener subred y usar como src
+    # iface: get subnet from routing table
     if [ "$iface" != "any" ]; then
-        local subnet
-        subnet=$(ip addr show "$iface" 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
-        if [ -n "$subnet" ]; then
-            # Convertir IP/prefix a network address
-            local net
-            net=$(ip route show dev "$iface" 2>/dev/null | grep -v default | awk '{print $1}' | head -1)
-            [ -n "$net" ] && args="$args -s $net"
-            dbg "iface $iface resolved to subnet $net"
-        fi
+        case "$iface" in
+            out:*)
+                local out_iface="${iface#out:}"
+                local router_ip
+                router_ip=$(ip addr show "$out_iface" 2>/dev/null | awk '/inet /{print $2}' | cut -d'/' -f1 | head -1)
+                [ -n "$router_ip" ] && args="$args -s $router_ip"
+                dbg "out iface $out_iface resolved to router_ip $router_ip"
+                ;;
+            *)
+                local net
+                net=$(ip route show dev "$iface" 2>/dev/null | grep -v default | awk '{print $1}' | head -1)
+                [ -n "$net" ] && args="$args -s $net"
+                dbg "iface $iface resolved to subnet $net"
+                ;;
+        esac
     fi
 
-    # sport/dport — no soportados en conntrack -D directamente
-    # filtramos con -L y eliminamos entrada a entrada
+    # sport/dport — not supported directly in conntrack -D, filter manually
     if [ "$sport" != "any" ] || [ "$dport" != "any" ]; then
         local tmp
         tmp=$(mktemp /tmp/nss-ct.XXXXXX)
@@ -58,176 +306,14 @@ ct_clear_rule_marks() {
     ui_ok "Conntrack entries cleared for this rule"
 }
 
-# ─── Parse one conntrack line into variables ──────────────────────────────────
-# Sets: CT_PROTO CT_SRC CT_SPORT CT_DST CT_DPORT CT_MARK CT_STATE CT_STATUS
-ct_parse_line() {
-    local line="$1"
-    CT_PROTO=""
-    CT_SRC="" CT_SPORT="" CT_DST="" CT_DPORT=""
-    CT_MARK=0 CT_STATE="" CT_STATUS=""
-
-    # Protocol
-    CT_PROTO=$(echo "$line" | awk '{print $3}')
-
-    # TCP has state field; UDP does not
-    case "$CT_PROTO" in
-        tcp|6)
-            CT_STATE=$(echo "$line" | awk '{print $4}')
-            ;;
-        udp|17)
-            CT_STATE="stateless"
-            ;;
-        *)
-            CT_STATE="?"
-            ;;
-    esac
-
-    # src/dst — first occurrence is original direction
-    CT_SRC=$(echo "$line"  | grep -oE 'src=[^ ]+' | head -1 | cut -d= -f2)
-    CT_DST=$(echo "$line"  | grep -oE 'dst=[^ ]+' | head -1 | cut -d= -f2)
-    CT_SPORT=$(echo "$line" | grep -oE 'sport=[^ ]+' | head -1 | cut -d= -f2)
-    CT_DPORT=$(echo "$line" | grep -oE 'dport=[^ ]+' | head -1 | cut -d= -f2)
-    CT_MARK=$(echo "$line"  | grep -oE 'mark=[^ ]+' | head -1 | cut -d= -f2)
-    CT_STATUS=$(echo "$line"| grep -oE 'status=[^ ]+' | head -1 | cut -d= -f2)
-
-    # Defaults
-    CT_SPORT="${CT_SPORT:-?}"
-    CT_DPORT="${CT_DPORT:-?}"
-    CT_MARK="${CT_MARK:-0}"
-}
-
-# ─── Check if mark has our NSS bypass bit set ─────────────────────────────────
-ct_is_bypassed() {
-    local mark="$1"
-    # NSS_MARK=0x00010000 — arithmetic check in ash (hex needs conversion)
-    local mark_dec
-    mark_dec=$(printf '%d' "$mark" 2>/dev/null) || mark_dec=0
-    local nss_dec
-    nss_dec=$(printf '%d' "$NSS_MARK" 2>/dev/null) || nss_dec=65536
-    [ $(( mark_dec & nss_dec )) -ne 0 ]
-}
-
-# ─── Get interface for a src IP from routing table ────────────────────────────
-ct_iface_for_src() {
-    local src="$1"
-    # Ask kernel which interface would receive from this src
-    ip route get "$src" 2>/dev/null | grep -oE 'dev [^ ]+' | head -1 | awk '{print $2}'
-}
-
-# ─── Determine NSS status for a connection ────────────────────────────────────
-# Returns: HW | SFE | CPU
-# We use ct_is_bypassed for our bypass mark.
-# For actual HW/SFE distinction we check ECM state if available.
-ct_nss_status() {
-    local mark="$1"
-    if ct_is_bypassed "$mark"; then
-        echo "CPU"
-        return
-    fi
-    # If ECM is loaded and frontend is NSS → likely HW accelerated
-    if [ -d "$ECM_DEBUGFS/ecm_nss_ipv4" ]; then
-        echo "HW"
-    elif [ -d "$ECM_DEBUGFS/ecm_sfe_ipv4" ]; then
-        echo "SFE"
-    else
-        echo "CPU"
-    fi
-}
-
-# ─── Dump all connections as structured records ───────────────────────────────
-# Output format (one per line):
-#   NUM|PROTO|SRC:SPORT|DST:DPORT|IFACE|NSS|BYPASS|MARK|STATE
-ct_dump_all() {
-    ct_check || return 1
-    local num=0
-    while IFS= read -r line; do
-        # Skip IPv6 lines if needed (col 1 = ipv6 has different layout)
-        # nf_conntrack format: "netns L3proto L4proto ..."
-        # Skip lines that start with ipv6 to keep layout simple (handle both)
-        local l3
-        l3=$(echo "$line" | awk '{print $1}')
-        [ "$l3" = "ipv6" ] && continue  # handled separately if needed
-
-        ct_parse_line "$line"
-        [ -z "$CT_SRC" ] && continue
-
-        num=$((num+1))
-        local iface
-        iface=$(ct_iface_for_src "$CT_SRC")
-        [ -z "$iface" ] && iface="?"
-
-        local nss_status
-        nss_status=$(ct_nss_status "$CT_MARK")
-
-        local bypassed="NO"
-        ct_is_bypassed "$CT_MARK" && bypassed="YES"
-
-        local src_str="${CT_SRC}:${CT_SPORT}"
-        local dst_str="${CT_DST}:${CT_DPORT}"
-
-        printf "%d|%s|%s|%s|%s|%s|%s|%s|%s\n" \
-            "$num" "$CT_PROTO" "$src_str" "$dst_str" \
-            "$iface" "$nss_status" "$bypassed" "$CT_MARK" "$CT_STATE"
-    done < "$CONNTRACK_FILE"
-}
-
-# ─── Dump connections with IPv6 too ──────────────────────────────────────────
-ct_dump_all_v6() {
-    ct_check || return 1
-    local num=0
-    while IFS= read -r line; do
-        ct_parse_line "$line"
-        [ -z "$CT_SRC" ] && continue
-        num=$((num+1))
-        local iface
-        iface=$(ct_iface_for_src "$CT_SRC" 2>/dev/null)
-        [ -z "$iface" ] && iface="?"
-        local nss_status
-        nss_status=$(ct_nss_status "$CT_MARK")
-        local bypassed="NO"
-        ct_is_bypassed "$CT_MARK" && bypassed="YES"
-        printf "%d|%s|%s:%s|%s:%s|%s|%s|%s|%s|%s\n" \
-            "$num" "$CT_PROTO" "$CT_SRC" "$CT_SPORT" "$CT_DST" "$CT_DPORT" \
-            "$iface" "$nss_status" "$bypassed" "$CT_MARK" "$CT_STATE"
-    done < "$CONNTRACK_FILE"
-}
-
-# ─── Get single connection by NUM ─────────────────────────────────────────────
-ct_get_by_num() {
-    local target="$1"
-    ct_dump_all | awk -F'|' -v n="$target" '$1==n {print; exit}'
-}
-
-# ─── Count total connections ──────────────────────────────────────────────────
-ct_count() {
-    wc -l < "$CONNTRACK_FILE" 2>/dev/null || echo 0
-}
-
-# ─── Count bypassed connections ───────────────────────────────────────────────
-ct_count_bypassed() {
-    local nss_dec
-    nss_dec=$(printf '%d' "$NSS_MARK" 2>/dev/null) || nss_dec=65536
-    local count=0
-    while IFS= read -r line; do
-        local mark
-        mark=$(echo "$line" | grep -oE 'mark=[^ ]+' | head -1 | cut -d= -f2)
-        local mark_dec
-        mark_dec=$(printf '%d' "${mark:-0}" 2>/dev/null) || mark_dec=0
-        [ $(( mark_dec & nss_dec )) -ne 0 ] && count=$((count+1))
-    done < "$CONNTRACK_FILE"
-    echo "$count"
-}
-
-# ─── Debug: show conntrack lines matching our mark ────────────────────────────
+# ─── Debug: show conntrack entries with our mark ─────────────────────────────
 ct_debug_mark() {
     ui_section "Conntrack entries with NSS-Switch mark ($NSS_MARK)"
     local found=0
     while IFS= read -r line; do
-        local mark
+        local mark mark_dec nss_dec
         mark=$(echo "$line" | grep -oE 'mark=[^ ]+' | head -1 | cut -d= -f2)
-        local mark_dec
         mark_dec=$(printf '%d' "${mark:-0}" 2>/dev/null) || mark_dec=0
-        local nss_dec
         nss_dec=$(printf '%d' "$NSS_MARK" 2>/dev/null) || nss_dec=65536
         if [ $(( mark_dec & nss_dec )) -ne 0 ]; then
             echo "  $line"
