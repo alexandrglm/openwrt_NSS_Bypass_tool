@@ -54,15 +54,71 @@ _ct_build_iface_map() {
     ' > "$tmpfile"
 }
 
+# ─── Compress IPv6 address RFC 5952 ──────────────────────────────────────────
+_ipv6_compress() {
+    echo "$1" | awk '{
+        split($0, a, ":")
+        for(i=1;i<=8;i++) {
+            gsub(/^0+/,"",a[i])
+            if(a[i]=="") a[i]="0"
+        }
+        max_len=0; max_start=0; cur_len=0; cur_start=0
+        for(i=1;i<=8;i++) {
+            if(a[i]=="0") {
+                if(cur_len==0) cur_start=i
+                cur_len++
+                if(cur_len>max_len) { max_len=cur_len; max_start=cur_start }
+            } else { cur_len=0 }
+        }
+        result=""
+        i=1
+        while(i<=8) {
+            if(max_len>1 && i==max_start) {
+                if(i==1) result="::"
+                else result=result"::"
+                i+=max_len
+            } else {
+                if(result!="" && substr(result,length(result),1)!=":") result=result":"
+                result=result a[i]
+                i++
+            }
+        }
+        print result
+    }'
+}
+
 # ─── Get interface for a src IP ───────────────────────────────────────────────
 # Returns: iface name, "local:iface" for router-own IPs, or "?"
 ct_iface_for_src() {
     local src="$1"
     local found=""
+
+    # Detect IPv6
+    if echo "$src" | grep -q ":"; then
+        # IPv6 path — use ip -6 route get
+        local dev
+        dev=$(ip -6 route get "$src" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}')
+        if [ -z "$dev" ] || [ "$dev" = "lo" ]; then
+            # Local router IP or loopback — find which iface owns it
+            local own_iface
+            own_iface=$(ip -6 addr show 2>/dev/null | awk -v src="$src" '
+                /^[0-9]+: / { iface=$2; gsub(/:$/,"",iface) }
+                /inet6 / {
+                    split($2, a, "/")
+                    if(a[1]==src) print iface
+                }
+            ')
+            [ -n "$own_iface" ] && echo "local:$own_iface" || echo "local:pppoe-wan"
+        else
+            echo "$dev"
+        fi
+        return
+    fi
+
+    # IPv4 path — existing logic
     local tmp
     tmp=$(mktemp /tmp/nss-iface.XXXXXX)
     _ct_build_iface_map "$tmp"
-
     while IFS=' ' read -r ip cidr iface; do
         if [ "$src" = "$ip" ]; then
             rm -f "$tmp"
@@ -73,7 +129,6 @@ ct_iface_for_src() {
             found="$iface"
         fi
     done < "$tmp"
-
     rm -f "$tmp"
     [ -n "$found" ] && echo "$found" && return
     echo "?"
@@ -137,18 +192,13 @@ ct_nss_status() {
 # Filters out router-local connections (local:*) — use ct_dump_all_full for those
 ct_dump_all() {
     ct_check || return 1
-
-    # Build iface map once for performance
     local ifmap
     ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
     _ct_build_iface_map "$ifmap"
-
     local num=0
     while IFS= read -r line; do
         ct_parse_line "$line"
         [ -z "$CT_SRC" ] && continue
-
-        # Resolve interface
         local iface found=""
         while IFS=' ' read -r ip cidr if2; do
             if [ "$CT_SRC" = "$ip" ]; then
@@ -161,25 +211,32 @@ ct_dump_all() {
         done < "$ifmap"
         [ -z "$found" ] && found="?"
         iface="$found"
-
-        # Skip router-local connections from normal dump
         case "$iface" in local:*) continue ;; esac
         [ "$iface" = "?" ] && continue
-
         num=$((num+1))
         local nss_status bypassed
         nss_status=$(ct_nss_status "$CT_MARK")
         bypassed="NO"
         ct_is_bypassed "$CT_MARK" && bypassed="YES"
-
-        printf "%d|%s|%s:%s|%s:%s|%s|%s|%s|%s|%s\n" \
+        # Comprimir IPv6 si aplica
+        local display_src display_dst
+        if echo "$CT_SRC" | grep -q ":"; then
+            display_src=$(_ipv6_compress "$CT_SRC")
+        else
+            display_src="$CT_SRC"
+        fi
+        if echo "$CT_DST" | grep -q ":"; then
+            display_dst=$(_ipv6_compress "$CT_DST")
+        else
+            display_dst="$CT_DST"
+        fi
+        printf "%d|%s|%s#%s|%s#%s|%s|%s|%s|%s|%s\n" \
             "$num" "$CT_PROTO" \
-            "$CT_SRC" "$CT_SPORT" \
-            "$CT_DST" "$CT_DPORT" \
+            "$display_src" "$CT_SPORT" \
+            "$display_dst" "$CT_DPORT" \
             "$iface" "$nss_status" "$bypassed" \
             "$CT_MARK" "$CT_STATE"
     done < "$CONNTRACK_FILE"
-
     rm -f "$ifmap"
 }
 
@@ -188,16 +245,13 @@ ct_dump_all() {
 # IFACE will show "local:pppoe-wan", "local:br-lan" etc for router traffic
 ct_dump_all_full() {
     ct_check || return 1
-
     local ifmap
     ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
     _ct_build_iface_map "$ifmap"
-
     local num=0
     while IFS= read -r line; do
         ct_parse_line "$line"
         [ -z "$CT_SRC" ] && continue
-
         local iface found=""
         while IFS=' ' read -r ip cidr if2; do
             if [ "$CT_SRC" = "$ip" ]; then
@@ -210,21 +264,30 @@ ct_dump_all_full() {
         done < "$ifmap"
         [ -z "$found" ] && found="?"
         iface="$found"
-
         num=$((num+1))
         local nss_status bypassed
         nss_status=$(ct_nss_status "$CT_MARK")
         bypassed="NO"
         ct_is_bypassed "$CT_MARK" && bypassed="YES"
-
-        printf "%d|%s|%s:%s|%s:%s|%s|%s|%s|%s|%s\n" \
+        # Comprimir IPv6 si aplica
+        local display_src display_dst
+        if echo "$CT_SRC" | grep -q ":"; then
+            display_src=$(_ipv6_compress "$CT_SRC")
+        else
+            display_src="$CT_SRC"
+        fi
+        if echo "$CT_DST" | grep -q ":"; then
+            display_dst=$(_ipv6_compress "$CT_DST")
+        else
+            display_dst="$CT_DST"
+        fi
+        printf "%d|%s|%s#%s|%s#%s|%s|%s|%s|%s|%s\n" \
             "$num" "$CT_PROTO" \
-            "$CT_SRC" "$CT_SPORT" \
-            "$CT_DST" "$CT_DPORT" \
+            "$display_src" "$CT_SPORT" \
+            "$display_dst" "$CT_DPORT" \
             "$iface" "$nss_status" "$bypassed" \
             "$CT_MARK" "$CT_STATE"
     done < "$CONNTRACK_FILE"
-
     rm -f "$ifmap"
 }
 
@@ -329,3 +392,4 @@ ct_debug_raw() {
     ui_section "Raw /proc/net/nf_conntrack"
     cat "$CONNTRACK_FILE" 2>/dev/null || ui_error "Cannot read conntrack"
 }
+

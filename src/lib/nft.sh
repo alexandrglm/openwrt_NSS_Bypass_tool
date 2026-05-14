@@ -202,3 +202,4 @@ nft_validate_iface() {
         *)     ip link show "$1" >/dev/null 2>&1 ;;
     esac
 }
+

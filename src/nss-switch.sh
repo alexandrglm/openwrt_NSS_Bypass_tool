@@ -69,13 +69,22 @@ cmd_watch() {
         ui_sep
 
         ui_conn_header
-        local num=0
         ct_dump_all_full | while IFS='|' read -r n proto src dst iface nss bypass mark state; do
-            num=$((num+1))
-            # Truncate long addresses for display
-            local src_short dst_short
-            src_short=$(echo "$src" | cut -c1-32)
-            dst_short=$(echo "$dst" | cut -c1-32)
+            local src_ip src_port dst_ip dst_port src_short dst_short
+            src_ip=$(echo "$src" | cut -d'#' -f1)
+            src_port=$(echo "$src" | cut -d'#' -f2)
+            dst_ip=$(echo "$dst" | cut -d'#' -f1)
+            dst_port=$(echo "$dst" | cut -d'#' -f2)
+            if echo "$src_ip" | grep -q ":"; then
+                src_short="[${src_ip}]:${src_port}"
+            else
+                src_short="${src_ip}:${src_port}"
+            fi
+            if echo "$dst_ip" | grep -q ":"; then
+                dst_short="[${dst_ip}]:${dst_port}"
+            else
+                dst_short="${dst_ip}:${dst_port}"
+            fi
             ui_conn_row "$n" "$proto" "$src_short" "$dst_short" "$iface" "$nss" "$bypass"
         done
 
@@ -102,15 +111,17 @@ cmd_pick() {
         return 0
     fi
 
-    # Display — awk evita redireccion de stdin
     ui_conn_header
     awk -F'|' '{
-        src=substr($3,1,40); dst=substr($4,1,40)
-        printf "%-4s %-6s %-36s %-36s %-17s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
+        split($3, s, "#"); split($4, d, "#")
+        src_ip=substr(s[1],1,32)
+        dst_ip=substr(d[1],1,32)
+        src=(src_ip ~ /:/) ? "["src_ip"]:"s[2] : src_ip":"s[2]
+        dst=(dst_ip ~ /:/) ? "["dst_ip"]:"d[2] : dst_ip":"d[2]
+        printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
     }' "$tmpfile"
     ui_sep
 
-    # Pick
     ui_ask_num "Select connection number to configure" 1 "$total" || {
         rm -f "$tmpfile"
         return 1
@@ -126,7 +137,6 @@ cmd_pick() {
         return 1
     fi
 
-    # Parse sin heredoc ni pipe (ambos roban stdin)
     local num proto src dst iface nss bypass mark state
     num=$(echo "$conn_line"   | cut -d'|' -f1)
     proto=$(echo "$conn_line" | cut -d'|' -f2)
@@ -139,10 +149,10 @@ cmd_pick() {
     state=$(echo "$conn_line" | cut -d'|' -f9)
 
     local src_ip src_port dst_ip dst_port
-    src_ip=$(echo "$src" | cut -d: -f1)
-    src_port=$(echo "$src" | cut -d: -f2)
-    dst_ip=$(echo "$dst" | cut -d: -f1)
-    dst_port=$(echo "$dst" | cut -d: -f2)
+    src_ip=$(echo "$src" | cut -d'#' -f1)
+    src_port=$(echo "$src" | cut -d'#' -f2)
+    dst_ip=$(echo "$dst" | cut -d'#' -f1)
+    dst_port=$(echo "$dst" | cut -d'#' -f2)
 
     ui_section "Selected Connection"
     ui_kv "Protocol"  "$proto"
@@ -205,7 +215,7 @@ cmd_pick() {
         persist="no"
     fi
 
-    ui_ask_input "Comment for this rule" "bypass from pick: $src -> $dst"
+    ui_ask_input "Comment for this rule" "bypass from pick: $src_ip -> $dst_ip"
     local comment="$UI_INPUT"
 
     ui_section "Rule Preview"
@@ -626,3 +636,4 @@ case "$COMMAND" in
         exit 1
         ;;
 esac
+
