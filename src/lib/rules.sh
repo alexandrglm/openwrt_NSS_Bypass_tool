@@ -189,8 +189,10 @@ rules_validate() {
     # At least one criterion must be non-any
     if [ "$proto" = "any" ] && [ "$src_ip" = "any" ] && [ "$dst_ip" = "any" ] && \
        [ "$src_port" = "any" ] && [ "$dst_port" = "any" ] && [ "$iface" = "any" ]; then
-        ui_error "At least one match criterion must be specified (can't bypass everything blindly)"
-        ok=0
+        ui_warn "Rule matches ALL connections - NSS will be disabled for everything"
+        ui_warn "This may impact routing performance significantly"
+        # Permitir ANY a todo, venimos desde ct_clear_rule_marks(), que ahora permite lfush a todo ante un any all
+        # ok=0
     fi
     [ "$ok" -eq 1 ]
 }

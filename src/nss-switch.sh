@@ -2,7 +2,7 @@
 # nss-switch.sh — Qualcomm NSS selective bypass manager
 # /usr/bin/NSS-Switch/nss-switch.sh
 # ASH compatible — BusyBox v1.37+
-# Usage: nss-switch.sh <command> [options]
+# Usage: nss-switch <command> [options]
 
 # set -e
 
@@ -38,6 +38,16 @@ for lib in ui ecm conntrack nft detect rules; do
     fi
     . "$lib_file"
 done
+# ─── Load debug monitor  ────────────────────────
+DEBUG_LIB="$SELF_DIR/lib/debug.sh"
+if [ -f "$DEBUG_LIB" ]; then
+    . "$DEBUG_LIB"
+else
+    cmd_debug_monitor() {
+        ui_error "debug.sh should not be visible in PRODUCTION, monitor NOT available, sorry!"
+        return 1
+    }
+fi
 
 # ─── Root check ───────────────────────────────────────────────────────────────
 check_root() {
@@ -46,6 +56,13 @@ check_root() {
 
 # ─── Log every invocation ────────────────────────────────────────────────────
 dbg "Invoked: $0 $*"
+
+# ─── Clean tmp files in each exec ────────────────────────────────────────────
+_clean_tmp() {
+    rm -f /tmp/nss-switch-pick.* 2>/dev/null
+    rm -f /tmp/nss-ifmap.* 2>/dev/null
+}
+trap _clean_tmp INT TERM EXIT
 
 # ─── COMMAND: watch ───────────────────────────────────────────────────────────
 cmd_watch() {
@@ -97,10 +114,14 @@ cmd_watch() {
 cmd_pick() {
     check_root
     ui_banner
-    ui_section "Connection Picker — Select a connection to bypass NSS"
+    ui_section "Connection Picker | Loading ..."
 
     local tmpfile
     tmpfile=$(mktemp /tmp/nss-switch-pick.XXXXXX)
+
+    # DEBUG trap particular
+    # trap "rm -f '$tmpfile'; trap - INT TERM EXIT; exit" INT TERM EXIT
+
     ct_dump_all_full > "$tmpfile"
 
     local total
@@ -111,16 +132,61 @@ cmd_pick() {
         return 0
     fi
 
+# DEBUG:    Pendiente reparar awk con la sintax de ash busybox
+#     ui_conn_header
+#     while IFS='|' read -r num proto src dst iface nss bypass mark state; do
+#         src_ip=$(echo "$src" | cut -d'#' -f1)
+#         src_port=$(echo "$src" | cut -d'#' -f2)
+#         dst_ip=$(echo "$dst" | cut -d'#' -f1)
+#         dst_port=$(echo "$dst" | cut -d'#' -f2)
+#
+#         if echo "$src_ip" | grep -q ":"; then
+#             src_display="[${src_ip}]:${src_port}"
+#         else
+#             src_display="${src_ip}:${src_port}"
+#         fi
+#         if echo "$dst_ip" | grep -q ":"; then
+#             dst_display="[${dst_ip}]:${dst_port}"
+#         else
+#             dst_display="${dst_ip}:${dst_port}"
+#         fi
+#
+#         printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n" \
+#             "$num" "$proto" "$src_display" "$dst_display" "$iface" "$nss" "$bypass"
+#     done < "$tmpfile"
+#     ui_sep
     ui_conn_header
-    awk -F'|' '{
-        split($3, s, "#"); split($4, d, "#")
-        src_ip=substr(s[1],1,32)
-        dst_ip=substr(d[1],1,32)
-        src=(src_ip ~ /:/) ? "["src_ip"]:"s[2] : src_ip":"s[2]
-        dst=(dst_ip ~ /:/) ? "["dst_ip"]:"d[2] : dst_ip":"d[2]
-        printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
-    }' "$tmpfile"
+    while IFS='|' read -r n proto src dst iface nss bypass mark state; do
+        local src_ip src_port dst_ip dst_port src_short dst_short
+        src_ip=$(echo "$src" | cut -d'#' -f1)
+        src_port=$(echo "$src" | cut -d'#' -f2)
+        dst_ip=$(echo "$dst" | cut -d'#' -f1)
+        dst_port=$(echo "$dst" | cut -d'#' -f2)
+
+        if echo "$src_ip" | grep -q ":"; then
+            src_short="[${src_ip}]:${src_port}"
+        else
+            src_short="${src_ip}:${src_port}"
+        fi
+        if echo "$dst_ip" | grep -q ":"; then
+            dst_short="[${dst_ip}]:${dst_port}"
+        else
+            dst_short="${dst_ip}:${dst_port}"
+        fi
+
+        ui_conn_row "$n" "$proto" "$src_short" "$dst_short" "$iface" "$nss" "$bypass"
+    done < "$tmpfile"
     ui_sep
+#     ui_conn_header
+#     awk -F'|' '{
+#         split($3, s, "#"); split($4, d, "#")
+#         src_ip=substr(s[1],1,32)
+#         dst_ip=substr(d[1],1,32)
+#         src=(src_ip ~ /:/) ? "["src_ip"]:"s[2] : src_ip":"s[2]
+#         dst=(dst_ip ~ /:/) ? "["dst_ip"]:"d[2] : dst_ip":"d[2]
+#         printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
+#     }' "$tmpfile"
+#     ui_sep
 
     ui_ask_num "Select connection number to configure" 1 "$total" || {
         rm -f "$tmpfile"
@@ -174,11 +240,11 @@ cmd_pick() {
         r_proto="$proto"
     fi
     if ui_ask_yn "Match on source IP ($src_ip)?" n; then
-        ui_ask_input "Source IP or CIDR" "$src_ip"
+        ui_ask_input "Enter source IP/CIDR (or press Enter to keep '$src_ip')" "$src_ip"
         r_src_ip="$UI_INPUT"
     fi
     if ui_ask_yn "Match on destination IP ($dst_ip)?" n; then
-        ui_ask_input "Destination IP or CIDR" "$dst_ip"
+        ui_ask_input "Enter destination IP/CIDR (or press Enter to keep '$dst_ip')" "$dst_ip"
         r_dst_ip="$UI_INPUT"
     fi
     if [ "$proto" = "tcp" ] || [ "$proto" = "udp" ]; then
@@ -243,15 +309,13 @@ cmd_pick() {
 
     nft_apply
 
-    ui_info "Defuncting matched connections in ECM..."
-    if [ "$r_dport" != "any" ]; then
-        ecm_defunct_by_port "$r_dport"
-    elif [ "$r_sport" != "any" ]; then
-        ecm_defunct_by_port "$r_sport"
-    else
-        ecm_defunct_all
-    fi
+    ui_info "Flushing matched connections..."
+    ct_clear_rule_marks "$r_proto" "$r_src_ip" "$r_dst_ip" \
+        "$r_sport" "$r_dport" "$r_iface"
 
+    # DEBUG trap particular
+    # rm -f "$tmpfile"
+    # trap - INT TERM EXIT
     ui_ok "Done. Connection will be handled by CPU (not NSS) going forward."
 }
 
@@ -263,7 +327,6 @@ cmd_add() {
     local persist="$PERSIST_DEFAULT" comment="manual rule"
     local defunct_after=1
 
-    # Parse args
     while [ $# -gt 0 ]; do
         case "$1" in
             --proto)      proto="$2";    shift 2 ;;
@@ -294,26 +357,24 @@ cmd_add() {
     ui_kv "Interface"  "$iface"
     ui_kv "Persistent" "$persist"
     ui_kv "Comment"    "$comment"
+    [ "$defunct_after" = "0" ] && ui_kv "Defunct" "SKIP"
 
     rules_validate "$proto" "$src_ip" "$dst_ip" "$sport" "$dport" "$iface" || return 1
 
     local new_id
-    new_id=$(rules_add "$proto" "$src_ip" "$dst_ip" \
-        "$sport" "$dport" "$iface" "$persist" "$comment")
+    new_id=$(rules_add "$proto" "$src_ip" "$dst_ip" "$sport" "$dport" "$iface" "$persist" "$comment")
     ui_ok "Rule $new_id added to $RULES_FILE"
 
     nft_apply
 
     if [ "$defunct_after" = "1" ]; then
-        ui_info "Defuncting matched ECM connections..."
-        if [ "$dport" != "any" ]; then
-            ecm_defunct_by_port "$dport"
-        elif [ "$sport" != "any" ]; then
-            ecm_defunct_by_port "$sport"
-        else
-            ecm_defunct_all
-        fi
+        ui_info "Flushing matched connections..."
+        ct_clear_rule_marks "$proto" "$src_ip" "$dst_ip" "$sport" "$dport" "$iface"
+    else
+        ui_info "Skipped connection flush (--no-defunct)"
+        ui_info "New connections will be affected, existing ones will keep their state"
     fi
+
     ui_ok "Bypass rule $new_id is active"
 }
 
@@ -328,7 +389,7 @@ cmd_list() {
     if nft_chains_exist 2>/dev/null; then
         ui_ok "NSS-Switch chains are live in nftables"
     else
-        ui_warn "NSS-Switch chains NOT in live ruleset — run: nss-switch.sh apply"
+        ui_warn "NSS-Switch chains NOT in live ruleset — run: nss-switch apply"
     fi
 }
 
@@ -337,7 +398,7 @@ cmd_remove() {
     check_root
     local id="$1"
     if [ -z "$id" ]; then
-        ui_error "Usage: nss-switch.sh remove <rule-id>"
+        ui_error "Usage: nss-switch remove <rule-id>"
         return 1
     fi
     ui_banner
@@ -408,7 +469,7 @@ cmd_flush() {
             ui_ok "Temporary rules flushed"
             ;;
         *)
-            ui_error "Usage: nss-switch.sh flush [--rules|--all|--temp]"
+            ui_error "Usage: nss-switch flush [--rules|--all|--temp]"
             return 1
             ;;
     esac
@@ -488,6 +549,9 @@ cmd_debug() {
         script-raw)
             ui_section "Raw generated firewall script"
             cat "$FW_SCRIPT" 2>/dev/null || ui_warn "No script generated yet"
+            ;;
+        monitor)
+            cmd_debug_monitor "$@"
             ;;
         *)
             ui_error "Unknown debug subcommand: $subcmd"
@@ -576,7 +640,7 @@ cmd_status() {
 # ─── HELP ─────────────────────────────────────────────────────────────────────
 cmd_help() {
     ui_banner
-    printf "\n${C_BOLD}Usage:${C_RESET}  nss-switch.sh <command> [options]\n\n"
+    printf "\n${C_BOLD}Usage:${C_RESET}  nss-switch <command> [options]\n\n"
     printf "${C_BOLD}Commands:${C_RESET}\n"
     printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "watch [--once] [interval]"       "Live connection viewer (NSS vs CPU)"
     printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "pick"                             "Interactive: pick a connection and bypass it"
@@ -603,12 +667,12 @@ cmd_help() {
     printf "  %-30s %s\n" "--no-defunct"              "Skip ECM defunct after adding"
     printf "\n"
     printf "${C_BOLD}Examples:${C_RESET}\n"
-    printf "  nss-switch.sh add --iface lan2 --persist --comment 'Deco off NSS'\n"
-    printf "  nss-switch.sh add --src-ip 192.168.1.50 --comment 'PC off NSS'\n"
-    printf "  nss-switch.sh add --proto tcp --dst-port 22 --temp\n"
-    printf "  nss-switch.sh watch\n"
-    printf "  nss-switch.sh pick\n"
-    printf "  nss-switch.sh debug env\n"
+    printf "  nss-switch add --iface lan2 --persist --comment 'Deco off NSS'\n"
+    printf "  nss-switch add --src-ip 192.168.1.50 --comment 'PC off NSS'\n"
+    printf "  nss-switch add --proto tcp --dst-port 22 --temp\n"
+    printf "  nss-switch watch\n"
+    printf "  nss-switch pick\n"
+    printf "  nss-switch debug env\n"
     printf "\n"
     cmd_debug_help
     printf "\n"

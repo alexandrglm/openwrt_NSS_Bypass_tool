@@ -190,85 +190,97 @@ ct_nss_status() {
 # ─── Dump all connections as structured records ───────────────────────────────
 # Output format: NUM|PROTO|SRC:SPORT|DST:DPORT|IFACE|NSS|BYPASS|MARK|STATE
 # Filters out router-local connections (local:*) — use ct_dump_all_full for those
-ct_dump_all() {
-    ct_check || return 1
-    local ifmap
-    ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
-    _ct_build_iface_map "$ifmap"
-    local num=0
-    while IFS= read -r line; do
-        ct_parse_line "$line"
-        [ -z "$CT_SRC" ] && continue
-        local iface found=""
-        while IFS=' ' read -r ip cidr if2; do
-            if [ "$CT_SRC" = "$ip" ]; then
-                found="local:$if2"
-                break
-            fi
-            if _ct_ip_in_cidr "$CT_SRC" "$cidr" 2>/dev/null; then
-                found="$if2"
-            fi
-        done < "$ifmap"
-        [ -z "$found" ] && found="?"
-        iface="$found"
-        case "$iface" in local:*) continue ;; esac
-        [ "$iface" = "?" ] && continue
-        num=$((num+1))
-        local nss_status bypassed
-        nss_status=$(ct_nss_status "$CT_MARK")
-        bypassed="NO"
-        ct_is_bypassed "$CT_MARK" && bypassed="YES"
-        # Comprimir IPv6 si aplica
-        local display_src display_dst
-        if echo "$CT_SRC" | grep -q ":"; then
-            display_src=$(_ipv6_compress "$CT_SRC")
-        else
-            display_src="$CT_SRC"
-        fi
-        if echo "$CT_DST" | grep -q ":"; then
-            display_dst=$(_ipv6_compress "$CT_DST")
-        else
-            display_dst="$CT_DST"
-        fi
-        printf "%d|%s|%s#%s|%s#%s|%s|%s|%s|%s|%s\n" \
-            "$num" "$CT_PROTO" \
-            "$display_src" "$CT_SPORT" \
-            "$display_dst" "$CT_DPORT" \
-            "$iface" "$nss_status" "$bypassed" \
-            "$CT_MARK" "$CT_STATE"
-    done < "$CONNTRACK_FILE"
-    rm -f "$ifmap"
-}
+# DEBUG Deprecated, replaced by ct_dump_all_full
+# ct_dump_all() {
+#     ct_check || return 1
+#     local ifmap
+#     ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
+#     _ct_build_iface_map "$ifmap"
+#     local num=0
+#     while IFS= read -r line; do
+#         ct_parse_line "$line"
+#         [ -z "$CT_SRC" ] && continue
+#         local iface found=""
+#         while IFS=' ' read -r ip cidr if2; do
+#             if [ "$CT_SRC" = "$ip" ]; then
+#                 found="local:$if2"
+#                 break
+#             fi
+#             if _ct_ip_in_cidr "$CT_SRC" "$cidr" 2>/dev/null; then
+#                 found="$if2"
+#             fi
+#         done < "$ifmap"
+#         [ -z "$found" ] && found="?"
+#         iface="$found"
+#         case "$iface" in local:*) continue ;; esac
+#         [ "$iface" = "?" ] && continue
+#         num=$((num+1))
+#         local nss_status bypassed
+#         nss_status=$(ct_nss_status "$CT_MARK")
+#         bypassed="NO"
+#         ct_is_bypassed "$CT_MARK" && bypassed="YES"
+#         # Comprimir IPv6 si aplica
+#         local display_src display_dst
+#         if echo "$CT_SRC" | grep -q ":"; then
+#             display_src=$(_ipv6_compress "$CT_SRC")
+#         else
+#             display_src="$CT_SRC"
+#         fi
+#         if echo "$CT_DST" | grep -q ":"; then
+#             display_dst=$(_ipv6_compress "$CT_DST")
+#         else
+#             display_dst="$CT_DST"
+#         fi
+#         printf "%d|%s|%s#%s|%s#%s|%s|%s|%s|%s|%s\n" \
+#             "$num" "$CT_PROTO" \
+#             "$display_src" "$CT_SPORT" \
+#             "$display_dst" "$CT_DPORT" \
+#             "$iface" "$nss_status" "$bypassed" \
+#             "$CT_MARK" "$CT_STATE"
+#     done < "$CONNTRACK_FILE"
+#     rm -f "$ifmap"
+# }
 
 # ─── Dump ALL connections including router-local ──────────────────────────────
 # Output format: NUM|PROTO|SRC:SPORT|DST:DPORT|IFACE|NSS|BYPASS|MARK|STATE
 # IFACE will show "local:pppoe-wan", "local:br-lan" etc for router traffic
 ct_dump_all_full() {
     ct_check || return 1
-    local ifmap
-    ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
-    _ct_build_iface_map "$ifmap"
+# DEBUG Cambio para extraer la iface, nada de iterar y crear mapa, directamente de ip route y a correr
+#     local ifmap
+#     ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
+
+    # DEBUG trap particular, pasado a trap global en 3 condiciones, este block NO interfiere con cambio iface map
+    # trap "rm -f '$ifmap'; trap - INT TERM EXIT; exit" INT TERM EXIT
+
+
+#     _ct_build_iface_map "$ifmap"
     local num=0
     while IFS= read -r line; do
         ct_parse_line "$line"
         [ -z "$CT_SRC" ] && continue
-        local iface found=""
-        while IFS=' ' read -r ip cidr if2; do
-            if [ "$CT_SRC" = "$ip" ]; then
-                found="local:$if2"
-                break
-            fi
-            if _ct_ip_in_cidr "$CT_SRC" "$cidr" 2>/dev/null; then
-                found="$if2"
-            fi
-        done < "$ifmap"
-        [ -z "$found" ] && found="?"
-        iface="$found"
+# DEBUG Cambio para extraer la iface, nada de iterar y crear mapa, directamente de ip route y a correr
+        local iface
+        iface=$(ct_iface_for_src "$CT_SRC")
+        [ -z "$iface" ] && iface="?"
+#         local iface found=""
+#         while IFS=' ' read -r ip cidr if2; do
+#             if [ "$CT_SRC" = "$ip" ]; then
+#                 found="local:$if2"
+#                 break
+#             fi
+#             if _ct_ip_in_cidr "$CT_SRC" "$cidr" 2>/dev/null; then
+#                 found="$if2"
+#             fi
+#         done < "$ifmap"
+#         [ -z "$found" ] && found="?"
+#         iface="$found"
         num=$((num+1))
         local nss_status bypassed
         nss_status=$(ct_nss_status "$CT_MARK")
         bypassed="NO"
         ct_is_bypassed "$CT_MARK" && bypassed="YES"
+
         # Comprimir IPv6 si aplica
         local display_src display_dst
         if echo "$CT_SRC" | grep -q ":"; then
@@ -288,13 +300,19 @@ ct_dump_all_full() {
             "$iface" "$nss_status" "$bypassed" \
             "$CT_MARK" "$CT_STATE"
     done < "$CONNTRACK_FILE"
-    rm -f "$ifmap"
+
+# DEBUG Cambio para extraer la iface, nada de iterar y crear mapa, directamente de ip route y a correr
+#     rm -f "$ifmap"
+
+
+    # DEBUG trap particular
+    # trap - INT TERM EXIT
 }
 
 # ─── Get single connection by NUM ─────────────────────────────────────────────
 ct_get_by_num() {
     local target="$1"
-    ct_dump_all | awk -F'|' -v n="$target" '$1==n {print; exit}'
+    ct_dump_all_full | awk -F'|' -v n="$target" '$1==n {print; exit}'
 }
 
 # ─── Count total connections ──────────────────────────────────────────────────
@@ -320,53 +338,62 @@ ct_count_bypassed() {
 ct_clear_rule_marks() {
     local proto="$1" src_ip="$2" dst_ip="$3"
     local sport="$4" dport="$5" iface="$6"
-    local args=""
 
-    [ "$proto"  != "any" ] && args="$args -p $proto"
-    [ "$src_ip" != "any" ] && args="$args -s $src_ip"
-    [ "$dst_ip" != "any" ] && args="$args -d $dst_ip"
+    dbg "Flushing connections for rule: proto=$proto src=$src_ip dst=$dst_ip sport=$sport dport=$dport iface=$iface"
 
-    # iface: get subnet from routing table
+    # Construir filtro de conntrack
+    local filter=""
+    [ "$proto"  != "any" ] && filter="$filter -p $proto"
+
+    # IPs
+    if [ "$src_ip" != "any" ] && [ "$dst_ip" != "any" ]; then
+        filter="$filter -s $src_ip -d $dst_ip"
+    elif [ "$src_ip" != "any" ]; then
+        filter="$filter -s $src_ip"
+    elif [ "$dst_ip" != "any" ]; then
+        filter="$filter -d $dst_ip"
+    fi
+
+    # Puertos
+    if [ "$sport" != "any" ] && [ "$dport" != "any" ]; then
+        filter="$filter --sport $sport --dport $dport"
+    elif [ "$sport" != "any" ]; then
+        filter="$filter --sport $sport"
+    elif [ "$dport" != "any" ]; then
+        filter="$filter --dport $dport"
+    fi
+
+    # Interfaz - resolver a IP/subred
+    local src_net=""
     if [ "$iface" != "any" ]; then
         case "$iface" in
             out:*)
                 local out_iface="${iface#out:}"
-                local router_ip
-                router_ip=$(ip addr show "$out_iface" 2>/dev/null | awk '/inet /{print $2}' | cut -d'/' -f1 | head -1)
-                [ -n "$router_ip" ] && args="$args -s $router_ip"
-                dbg "out iface $out_iface resolved to router_ip $router_ip"
+                src_net=$(ip addr show "$out_iface" 2>/dev/null | \
+                         grep -E 'inet |inet6 ' | head -1 | awk '{print $2}')
                 ;;
             *)
-                local net
-                net=$(ip route show dev "$iface" 2>/dev/null | grep -v default | awk '{print $1}' | head -1)
-                [ -n "$net" ] && args="$args -s $net"
-                dbg "iface $iface resolved to subnet $net"
+                src_net=$(ip route show dev "$iface" 2>/dev/null | \
+                         grep -v default | head -1 | awk '{print $1}')
                 ;;
         esac
+        [ -n "$src_net" ] && filter="$filter -s $src_net"
     fi
 
-    # sport/dport — not supported directly in conntrack -D, filter manually
-    if [ "$sport" != "any" ] || [ "$dport" != "any" ]; then
-        local tmp
-        tmp=$(mktemp /tmp/nss-ct.XXXXXX)
-        conntrack -L $args 2>/dev/null > "$tmp"
-        while IFS= read -r line; do
-            [ "$sport" != "any" ] && ! echo "$line" | grep -oE 'sport=[^ ]+' | head -1 | grep -q "=$sport$" && continue
-            [ "$dport" != "any" ] && ! echo "$line" | grep -oE 'dport=[^ ]+' | head -1 | grep -q "=$dport$" && continue
-            local e_proto e_src e_dst
-            e_proto=$(echo "$line" | awk '{print $1}')
-            e_src=$(echo "$line" | grep -oE 'src=[^ ]+' | head -1 | cut -d= -f2)
-            e_dst=$(echo "$line" | grep -oE 'dst=[^ ]+' | head -1 | cut -d= -f2)
-            conntrack -D -p "$e_proto" -s "$e_src" -d "$e_dst" 2>/dev/null; true
-            dbg "Deleted: $e_proto $e_src -> $e_dst"
-        done < "$tmp"
-        rm -f "$tmp"
+    # Ejecutar borrado en caliente
+    if [ -n "$filter" ]; then
+        dbg "conntrack -D $filter"
+        conntrack -D $filter 2>/dev/null
+        ui_ok "Matching conntrack entries flushed"
     else
-        dbg "conntrack -D $args"
-        conntrack -D $args 2>/dev/null; true
+        # Regla any - flushear todo conntrack
+        ui_warn "Rule matches ALL connections - flushing entire conntrack"
+        conntrack -F 2>/dev/null
+        ui_ok "All conntrack entries flushed"
     fi
 
-    ui_ok "Conntrack entries cleared for this rule"
+    # Forzar re-evaluación en ECM
+    ecm_defunct_all
 }
 
 # ─── Debug: show conntrack entries with our mark ─────────────────────────────

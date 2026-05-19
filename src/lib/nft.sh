@@ -183,8 +183,130 @@ nft_show_our_rules() {
 }
 
 # ─── Validate rule fields ─────────────────────────────────────────────────────
+nft_validate_ipv6() {
+    local ip="$1"
+    local original="$ip"
+
+    # Extraer parte IP y CIDR
+    local cidr=""
+    case "$ip" in
+        */*)
+            cidr="${ip##*/}"
+            ip="${ip%%/*}"
+            # Validar CIDR 0-128
+            [ "$cidr" -ge 0 ] 2>/dev/null || return 1
+            [ "$cidr" -le 128 ] 2>/dev/null || return 1
+            ;;
+    esac
+
+    # Normalizar: convertir a minúsculas
+    ip=$(echo "$ip" | tr 'A-F' 'a-f')
+
+    # Regla 1: Solo caracteres válidos
+    echo "$ip" | grep -qE '^[0-9a-f:]+$' || return 1
+
+    # Regla 2: No puede empezar ni terminar con : (excepto ::)
+    case "$ip" in
+        :*) [ "$ip" != "::" ] && return 1 ;;
+        *:) [ "$ip" != "::" ] && return 1 ;;
+    esac
+
+    # Regla 3: Contar :: (máximo uno)
+    local double_colon_count=$(echo "$ip" | grep -o "::" | wc -l)
+    [ "$double_colon_count" -gt 1 ] && return 1
+
+    # Regla 4: Descomponer en grupos
+    # Reemplazar :: por un marcador temporal
+    local has_double_colon=0
+    if echo "$ip" | grep -q "::"; then
+        has_double_colon=1
+        ip=$(echo "$ip" | sed 's/::/:FFFF:/')
+    fi
+
+    # Separar por :
+    local old_ifs="$IFS"
+    IFS=':'
+    set -- $ip
+    local groups=$#
+    IFS="$old_ifs"
+
+    # Regla 5: Número de grupos válido
+    # Sin :: -> exactamente 8 grupos
+    # Con :: -> entre 1 y 7 grupos visibles (los ceros implícitos completan hasta 8)
+    if [ "$has_double_colon" -eq 0 ]; then
+        # Sin ::, deben ser exactamente 8 grupos
+        [ "$groups" -ne 8 ] && return 1
+    else
+        # Con ::, los grupos visibles deben ser entre 1 y 7
+        # (porque :: ya cuenta como al menos un grupo de ceros)
+        [ "$groups" -lt 1 ] && return 1
+        [ "$groups" -gt 7 ] && return 1
+    fi
+
+    # Regla 6: Validar cada grupo
+    old_ifs="$IFS"
+    IFS=':'
+    for group in $ip; do
+        # Saltar el marcador FFFF (no es un grupo real)
+        [ "$group" = "FFFF" ] && continue
+
+        # Grupo vacío? (solo puede pasar si era :: y ya lo manejamos)
+        [ -z "$group" ] && continue
+
+        # Longitud del grupo: 1-4 caracteres
+        len=$(echo -n "$group" | wc -c)
+        [ "$len" -lt 1 ] && return 1
+        [ "$len" -gt 4 ] && return 1
+
+        # Validar que sea hexadecimal
+        echo "$group" | grep -qE '^[0-9a-f]+$' || return 1
+
+        # Convertir a decimal y validar rango (0-65535)
+        local dec
+        dec=$(printf "%d" "0x$group" 2>/dev/null)
+        [ "$dec" -ge 0 ] 2>/dev/null || return 1
+        [ "$dec" -le 65535 ] 2>/dev/null || return 1
+    done
+    IFS="$old_ifs"
+
+    # Regla 7: IPv4 incrustada? (formato ::ffff:192.168.1.1)
+    if echo "$original" | grep -qiE '::ffff:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
+        # Extraer la parte IPv4 y validarla
+        local ipv4_part="${original##*:}"
+        # Validar IPv4 con función existente
+        nft_validate_ipv4 "$ipv4_part" || return 1
+    fi
+
+    return 0
+}
 nft_validate_ip() {
-    echo "$1" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$'
+    local ip="$1"
+
+    # IPv4
+    if echo "$ip" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$'; then
+        # Validación IPv4 existente
+        local ip_only="${ip%%/*}"
+        local oct1=$(echo "$ip_only" | cut -d'.' -f1)
+        local oct2=$(echo "$ip_only" | cut -d'.' -f2)
+        local oct3=$(echo "$ip_only" | cut -d'.' -f3)
+        local oct4=$(echo "$ip_only" | cut -d'.' -f4)
+        [ "$oct1" -le 255 ] && [ "$oct2" -le 255 ] && \
+        [ "$oct3" -le 255 ] && [ "$oct4" -le 255 ] || return 1
+
+        local cidr="${ip##*/}"
+        if [ "$ip" != "$ip_only" ]; then
+            [ "$cidr" -ge 0 ] 2>/dev/null && [ "$cidr" -le 32 ] 2>/dev/null || return 1
+        fi
+        return 0
+    fi
+
+    # IPv6
+    if echo "$ip" | grep -q ":"; then
+        nft_validate_ipv6 "$ip"
+        return $?
+    fi
+
+    return 1
 }
 
 nft_validate_port() {
