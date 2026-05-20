@@ -6,8 +6,8 @@
 # ─── Column width configuration (unified for all tables) ─────────────────────
 # IPv6 max compressed: 39 chars + []:port = ~45-50 chars
 # FIXED widths - NO dynamic calculation that truncates IPv6
-UI_SRC_WIDTH=38
-UI_DST_WIDTH=38
+UI_SRC_WIDTH=40
+UI_DST_WIDTH=40
 UI_NUM_WIDTH=4
 UI_PROTO_WIDTH=6
 UI_IFACE_WIDTH=15
@@ -155,10 +155,19 @@ ui_section() {
     printf "${SLIM_MR}${C_RESET}\n"
 }
 
+
+# ─── Calculate total table width (sum of all columns + spaces) ────────────────
+ui_table_width() {
+    local num_spaces=6
+    echo $(( UI_NUM_WIDTH + UI_PROTO_WIDTH + UI_SRC_WIDTH + UI_DST_WIDTH + UI_IFACE_WIDTH + UI_NSS_WIDTH + UI_BYPASS_WIDTH + num_spaces ))
+}
+
+# ─── Separator line matching table width (not terminal width) ─────────────────
 ui_sep() {
-    ui_get_term_size 2>/dev/null || true
+    local w
+    w=$(ui_table_width)
     printf "${FG_DIM}"
-    _rep "$SLIM_H" "${TERM_COLS:-80}"
+    _rep "$SLIM_H" "$w"
     printf "${C_RESET}\n"
 }
 
@@ -214,19 +223,19 @@ ui_banner() {
     printf "${C_RESET}"
 }
 
-# ─── Header bar (ash-compatible) ─────────────────────────────────────────────
+# ─── Header bar (usa el ancho de la tabla) ──────────────────────────────
 ui_header_bar() {
     local title="$1" subtitle="$2" right="$3"
-    ui_get_term_size
-    local w="$TERM_COLS"
+    local table_width
+    table_width=$(ui_table_width)
 
-    # Truncate if too long
-    local max_title_len=$(( w / 3 ))
+    # Truncate title if too long for table width
+    local max_title_len=$(( table_width / 3 ))
     [ ${#title} -gt $max_title_len ] && title="${title:0:$((max_title_len-3))}..."
 
     local left_len=$(( ${#title} + ${#subtitle} + 3 ))
     local right_len=${#right}
-    local pad=$(( w - left_len - right_len - 2 ))
+    local pad=$(( table_width - left_len - right_len - 2 ))
     [ "$pad" -lt 1 ] && pad=1
 
     printf '%b%b%b %s%b  %s%b' \
@@ -236,13 +245,15 @@ ui_header_bar() {
     printf '%b%s %b\n' "$FG_BRIGHT" "$right" "$C_RESET"
 }
 
-# ─── Keybind hint bar ─────────────────────────────────────────────────────────
+# ─── Keybind hint bar - usa el ancho de la tabla ──────────────────────────────
 ui_hint_bar() {
     local hints="$*"
-    ui_get_term_size
+    local table_width
+    table_width=$(ui_table_width)
+
     printf "${BG_DARK}${FG_DIM} %s" "$hints"
     local used=$(( ${#hints} + 1 ))
-    local pad=$(( TERM_COLS - used ))
+    local pad=$(( table_width - used ))
     [ "$pad" -gt 0 ] && _rep ' ' "$pad"
     printf "${C_RESET}${C_DIM}%b" "$(ui_clear_eol)"
     printf "\n"
@@ -287,13 +298,22 @@ ui_watch_stats_panel() {
 }
 
 
+
+
 # ─── Connection table header ──────────────────────────────────────────────────
 ui_conn_header() {
+    local total_width
+    total_width=$(ui_table_width)
+
     printf "${BG_MED}${FG_DIM}"
     printf " %-${UI_NUM_WIDTH}s %-${UI_PROTO_WIDTH}s %-${UI_SRC_WIDTH}s %-${UI_DST_WIDTH}s %-${UI_IFACE_WIDTH}s %-${UI_NSS_WIDTH}s %-${UI_BYPASS_WIDTH}s" \
         "NUM" "PROTO" "SOURCE" "DESTINATION" "INTERFACE" "NSS" "BYPASS"
     printf "${C_RESET}\n"
-    ui_sep
+
+    # Dibujar separador del mismo ancho
+    printf "${FG_DIM}"
+    _rep "$SLIM_H" "$total_width"
+    printf "${C_RESET}\n"
 }
 
 

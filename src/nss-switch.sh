@@ -96,8 +96,8 @@ cmd_watch() {
     # ── First run: show loading indicator ───────────────────────────────────
     ui_clear_screen
     ui_cursor_home
-    ui_header_bar "NSS-Switch" "Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
-    printf "\n  ${FG_ACCENT}⠋${C_RESET}  Loading connections…\n"
+    ui_header_bar "NSS-Switch" "NSS Conntrack Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
+    printf "\n  ${FG_ACCENT}⠋${C_RESET}  Loading connections …\n"
 
     # Dump outside any pipe — fills tmpfile, no subshell issues
     ct_dump_all_full > "$_watch_tmp" 2>/dev/null
@@ -109,10 +109,11 @@ cmd_watch() {
 
     # Function to render the full display
     _render_watch() {
-        ui_clear_screen
+        printf "\033[2J\033[3J"
+        # Move cursor to home without clearing - this overwrites previous content
         ui_cursor_home
 
-        ui_header_bar "NSS-Switch" "Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
+        ui_header_bar "NSS-Switch" "NSS Conntrack Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
         ui_hint_bar "Ctrl+C exit  •  refresh every ${interval}s  •  ${ARROW} connections below  •  Use PgUp/PgDown or mouse to scroll"
 
         ui_watch_stats_panel "$total" "$bypassed" \
@@ -137,12 +138,19 @@ cmd_watch() {
         local file_total
         file_total=$(wc -l < "$_watch_tmp" 2>/dev/null || echo 0)
 
+        local table_width
+        table_width=$(ui_table_width)
+
         # Show warning if terminal too narrow for IPv6
-        if [ $TERM_COLS -lt 120 ] && [ $file_total -gt 0 ]; then
-            printf "  ${FG_YELLOW}${WARN_SYM}${C_RESET} ${C_DIM}Terminal narrow (${TERM_COLS}c), long IPv6 addresses may be truncated. Use wider terminal for full visibility.${C_RESET}\n"
+        if [ $TERM_COLS -lt $((table_width + 10)) ] && [ $file_total -gt 0 ]; then
+            printf "${FG_DIM}%*s${C_RESET}\n" "$table_width" " "
+            printf "  ${FG_YELLOW}${WARN_SYM}${C_RESET} ${C_DIM}Terminal narrow (${TERM_COLS}c), long IPv6 addresses may be truncated. Use wider terminal (125c) for full visibility.${C_RESET}\n"
         else
-            printf "  ${C_DIM}Total connections: %d  •  Use PgUp/PgDown or mouse to scroll${C_RESET}\n" "$file_total"
+            printf "${C_DIM}Total connections: %d  •  Use PgUp/PgDown or mouse to scroll${C_RESET}\n" "$file_total"
         fi
+
+        # Clear any leftover content below the cursor position
+        printf "\033[J"
     }
 
     # Render first time
