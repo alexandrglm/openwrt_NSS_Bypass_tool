@@ -57,146 +57,186 @@ check_root() {
 # ─── Log every invocation ────────────────────────────────────────────────────
 dbg "Invoked: $0 $*"
 
-# ─── Clean tmp files in each exec ────────────────────────────────────────────
+# ─── Clean tmp files ─────────────────────────────────────────────────────────
 _clean_tmp() {
     rm -f /tmp/nss-switch-pick.* 2>/dev/null
+    rm -f /tmp/nss-switch-watch.* 2>/dev/null
     rm -f /tmp/nss-ifmap.* 2>/dev/null
+    rm -f /tmp/nss-switch-exit.* 2>/dev/null
 }
-trap _clean_tmp INT TERM EXIT
+trap '_clean_tmp' EXIT
 
 # ─── COMMAND: watch ───────────────────────────────────────────────────────────
 cmd_watch() {
     check_root
+
     local interval="${1:-$WATCH_INTERVAL}"
     local once=0
     [ "$1" = "--once" ] && { once=1; interval=0; }
 
-    while true; do
-        clear
-        ui_banner
-        printf "${C_DIM}Refresh: ${interval}s  |  Press Ctrl+C to exit  |  %s${C_RESET}\n" "$(date)"
-        ui_sep
+    # ── Ctrl+C fix ──────────────────────────────────────────────────────────
+    local _watch_exit=0
+    local _watch_tmp
+    _watch_tmp=$(mktemp /tmp/nss-switch-watch.XXXXXX)
 
-        local total bypassed
-        total=$(ct_count)
-        bypassed=$(ct_count_bypassed)
-        ui_kv "Total connections" "$total"
-        ui_kv "NSS-bypassed (CPU)" "$bypassed"
-        ui_kv "NSS frontend" "$(ecm_frontend)  engine=$(ecm_engine)"
-        ui_sep
+    # Trap: clean up and exit
+    trap '
+        _watch_exit=1
+        # Show cursor again
+        printf "\033[?25h"
+        rm -f "$_watch_tmp"
+        printf "\n"
+        trap - INT TERM
+        exit 0
+    ' INT TERM
+
+    # Hide cursor (but NO alt_screen)
+    printf "\033[?25l"
+
+    # ── First run: show loading indicator ───────────────────────────────────
+    ui_clear_screen
+    ui_cursor_home
+    ui_header_bar "NSS-Switch" "Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
+    printf "\n  ${FG_ACCENT}⠋${C_RESET}  Loading connections…\n"
+
+    # Dump outside any pipe — fills tmpfile, no subshell issues
+    ct_dump_all_full > "$_watch_tmp" 2>/dev/null
+
+    local total bypassed rules
+    total=$(ct_count)
+    bypassed=$(ct_count_bypassed)
+    rules=$(rules_count 2>/dev/null || echo 0)
+
+    # Function to render the full display
+    _render_watch() {
+        ui_clear_screen
+        ui_cursor_home
+
+        ui_header_bar "NSS-Switch" "Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
+        ui_hint_bar "Ctrl+C exit  •  refresh every ${interval}s  •  ${ARROW} connections below  •  Use PgUp/PgDown or mouse to scroll"
+
+        ui_watch_stats_panel "$total" "$bypassed" \
+            "$(ecm_frontend)" "$(ecm_engine)" "$rules" "$interval"
 
         ui_conn_header
-        ct_dump_all_full | while IFS='|' read -r n proto src dst iface nss bypass mark state; do
-            local src_ip src_port dst_ip dst_port src_short dst_short
-            src_ip=$(echo "$src" | cut -d'#' -f1)
-            src_port=$(echo "$src" | cut -d'#' -f2)
-            dst_ip=$(echo "$dst" | cut -d'#' -f1)
-            dst_port=$(echo "$dst" | cut -d'#' -f2)
-            if echo "$src_ip" | grep -q ":"; then
-                src_short="[${src_ip}]:${src_port}"
-            else
-                src_short="${src_ip}:${src_port}"
-            fi
-            if echo "$dst_ip" | grep -q ":"; then
-                dst_short="[${dst_ip}]:${dst_port}"
-            else
-                dst_short="${dst_ip}:${dst_port}"
-            fi
-            ui_conn_row "$n" "$proto" "$src_short" "$dst_short" "$iface" "$nss" "$bypass"
-        done
 
-        [ "$once" = "1" ] && break
+        # Read from tmpfile — no pipe, so INT trap reaches parent correctly
+        while IFS='|' read -r n proto src dst iface nss bypass mark state; do
+            local sip sp dip dp ss ds
+            sip=$(echo "$src" | cut -d'#' -f1)
+            sp=$(echo "$src"  | cut -d'#' -f2)
+            dip=$(echo "$dst" | cut -d'#' -f1)
+            dp=$(echo "$dst"  | cut -d'#' -f2)
+            if echo "$sip" | grep -q ":"; then ss="[${sip}]:${sp}"; else ss="${sip}:${sp}"; fi
+            if echo "$dip" | grep -q ":"; then ds="[${dip}]:${dp}"; else ds="${dip}:${dp}"; fi
+            ui_conn_row "$n" "$proto" "$ss" "$ds" "$iface" "$nss" "$bypass"
+        done < "$_watch_tmp"
+
+        ui_sep
+
+        local file_total
+        file_total=$(wc -l < "$_watch_tmp" 2>/dev/null || echo 0)
+
+        # Show warning if terminal too narrow for IPv6
+        if [ $TERM_COLS -lt 120 ] && [ $file_total -gt 0 ]; then
+            printf "  ${FG_YELLOW}${WARN_SYM}${C_RESET} ${C_DIM}Terminal narrow (${TERM_COLS}c), long IPv6 addresses may be truncated. Use wider terminal for full visibility.${C_RESET}\n"
+        else
+            printf "  ${C_DIM}Total connections: %d  •  Use PgUp/PgDown or mouse to scroll${C_RESET}\n" "$file_total"
+        fi
+    }
+
+    # Render first time
+    _render_watch
+
+    [ "$_watch_exit" -eq 1 ] && { printf "\033[?25h"; rm -f "$_watch_tmp"; trap - INT TERM; return 0; }
+    [ "$once"        -eq 1 ] && { printf "\033[?25h"; rm -f "$_watch_tmp"; trap - INT TERM; return 0; }
+
+    # ── Main loop (subsequent refreshes) ────────────────────────────────────
+    while [ "$_watch_exit" -eq 0 ]; do
         sleep "$interval"
+        [ "$_watch_exit" -eq 1 ] && break
+
+        ui_get_term_size
+
+        # Refresh data
+        ct_dump_all_full > "$_watch_tmp" 2>/dev/null
+        total=$(ct_count)
+        bypassed=$(ct_count_bypassed)
+        rules=$(rules_count 2>/dev/null || echo 0)
+
+        # Re-render
+        _render_watch
+
+        [ "$once" -eq 1 ] && break
     done
+
+    # Show cursor again before exit
+    printf "\033[?25h"
+    rm -f "$_watch_tmp"
+    trap - INT TERM
 }
+
 
 # ─── COMMAND: pick ────────────────────────────────────────────────────────────
 cmd_pick() {
     check_root
-    ui_banner
-    ui_section "Connection Picker | Loading ..."
 
-    local tmpfile
-    tmpfile=$(mktemp /tmp/nss-switch-pick.XXXXXX)
+    local _pick_tmp
+    _pick_tmp=$(mktemp /tmp/nss-switch-pick.XXXXXX)
 
-    # DEBUG trap particular
-    # trap "rm -f '$tmpfile'; trap - INT TERM EXIT; exit" INT TERM EXIT
+    local _selection_tmp
+    _selection_tmp=$(mktemp /tmp/nss-switch-selection.XXXXXX)
 
-    ct_dump_all_full > "$tmpfile"
+    # Trap for cleanup only - NO alt_screen tricks
+    trap '
+        rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        printf "\n"
+        # Ensure cursor is visible
+        printf "\033[?25h"
+        trap - INT TERM
+        exit 0
+    ' INT TERM
+
+    # NO ui_watch_init() - that enables alt_screen which we don't want for pick
+    # Just clear screen and show the picker normally
+
+    ui_clear_screen
+    ui_cursor_home
+    ui_header_bar "NSS-Switch" "Connection Picker" "$(date +'%H:%M:%S')"
+    printf "\n  ${FG_ACCENT}⠋${C_RESET}  Loading connections…\n"
+
+    ct_dump_all_full > "$_pick_tmp" 2>/dev/null
 
     local total
-    total=$(wc -l < "$tmpfile")
+    total=$(wc -l < "$_pick_tmp" 2>/dev/null || echo 0)
+
     if [ "$total" -eq 0 ]; then
+        rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        trap - INT TERM
         ui_warn "No connections found in conntrack"
-        rm -f "$tmpfile"
         return 0
     fi
 
-# DEBUG:    Pendiente reparar awk con la sintax de ash busybox
-#     ui_conn_header
-#     while IFS='|' read -r num proto src dst iface nss bypass mark state; do
-#         src_ip=$(echo "$src" | cut -d'#' -f1)
-#         src_port=$(echo "$src" | cut -d'#' -f2)
-#         dst_ip=$(echo "$dst" | cut -d'#' -f1)
-#         dst_port=$(echo "$dst" | cut -d'#' -f2)
-#
-#         if echo "$src_ip" | grep -q ":"; then
-#             src_display="[${src_ip}]:${src_port}"
-#         else
-#             src_display="${src_ip}:${src_port}"
-#         fi
-#         if echo "$dst_ip" | grep -q ":"; then
-#             dst_display="[${dst_ip}]:${dst_port}"
-#         else
-#             dst_display="${dst_ip}:${dst_port}"
-#         fi
-#
-#         printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n" \
-#             "$num" "$proto" "$src_display" "$dst_display" "$iface" "$nss" "$bypass"
-#     done < "$tmpfile"
-#     ui_sep
-    ui_conn_header
-    while IFS='|' read -r n proto src dst iface nss bypass mark state; do
-        local src_ip src_port dst_ip dst_port src_short dst_short
-        src_ip=$(echo "$src" | cut -d'#' -f1)
-        src_port=$(echo "$src" | cut -d'#' -f2)
-        dst_ip=$(echo "$dst" | cut -d'#' -f1)
-        dst_port=$(echo "$dst" | cut -d'#' -f2)
+    # Make a permanent copy for the selection phase
+    cp "$_pick_tmp" "$_selection_tmp"
 
-        if echo "$src_ip" | grep -q ":"; then
-            src_short="[${src_ip}]:${src_port}"
-        else
-            src_short="${src_ip}:${src_port}"
-        fi
-        if echo "$dst_ip" | grep -q ":"; then
-            dst_short="[${dst_ip}]:${dst_port}"
-        else
-            dst_short="${dst_ip}:${dst_port}"
-        fi
+    # Display ALL connections (uses normal terminal mode, scroll works!)
+    if ! ui_pick_display_normal "$_pick_tmp" "$total"; then
+        rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        trap - INT TERM
+        ui_warn "Cancelled"
+        return 0
+    fi
 
-        ui_conn_row "$n" "$proto" "$src_short" "$dst_short" "$iface" "$nss" "$bypass"
-    done < "$tmpfile"
-    ui_sep
-#     ui_conn_header
-#     awk -F'|' '{
-#         split($3, s, "#"); split($4, d, "#")
-#         src_ip=substr(s[1],1,32)
-#         dst_ip=substr(d[1],1,32)
-#         src=(src_ip ~ /:/) ? "["src_ip"]:"s[2] : src_ip":"s[2]
-#         dst=(dst_ip ~ /:/) ? "["dst_ip"]:"d[2] : dst_ip":"d[2]
-#         printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
-#     }' "$tmpfile"
-#     ui_sep
-
-    ui_ask_num "Select connection number to configure" 1 "$total" || {
-        rm -f "$tmpfile"
-        return 1
-    }
     local sel="$UI_NUM"
 
+    # Now read from the SELECTION tmpfile
     local conn_line
-    conn_line=$(awk -F'|' -v n="$sel" '$1==n {print; exit}' "$tmpfile")
-    rm -f "$tmpfile"
+    conn_line=$(awk -F'|' -v n="$sel" '$1==n {print; exit}' "$_selection_tmp" 2>/dev/null)
+
+    # Clean up tmpfiles
+    rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+    trap - INT TERM
 
     if [ -z "$conn_line" ]; then
         ui_error "Connection $sel not found"
@@ -313,9 +353,6 @@ cmd_pick() {
     ct_clear_rule_marks "$r_proto" "$r_src_ip" "$r_dst_ip" \
         "$r_sport" "$r_dport" "$r_iface"
 
-    # DEBUG trap particular
-    # rm -f "$tmpfile"
-    # trap - INT TERM EXIT
     ui_ok "Done. Connection will be handled by CPU (not NSS) going forward."
 }
 
@@ -613,26 +650,53 @@ cmd_config() {
 # ─── COMMAND: status ──────────────────────────────────────────────────────────
 cmd_status() {
     ui_banner
-    ui_section "NSS-Switch Status"
 
-    ui_kv "Rules defined"  "$(rules_count)"
-    ui_kv "Temp rules"     "$(grep -c '|no|'  "$RULES_FILE" 2>/dev/null; true)"
-    ui_kv "Persist rules"  "$(grep -c '|yes|' "$RULES_FILE" 2>/dev/null; true)"
+    ui_section "NSS-Switch Status"
+    local r_total r_temp r_persist
+    r_total=$(rules_count)
+    r_temp=$(grep -c '|no|'  "$RULES_FILE" 2>/dev/null || echo 0)
+    r_persist=$(grep -c '|yes|' "$RULES_FILE" 2>/dev/null || echo 0)
+
+    ui_kv "Rules defined"  "$r_total  (${r_persist} persist, ${r_temp} temp)"
+    ui_kv "Rules file"     "$RULES_FILE"
+
     echo ""
-    ui_kv "ECM frontend" "$(ecm_frontend)"
-    ui_kv "ECM engine" "$(ecm_engine)"
-    ui_kv "Mark classifier" "$(ecm_mark_classifier_available && echo 'AVAILABLE' || echo 'MISSING')"
+    local fe eng mark_avail
+    fe=$(ecm_frontend)
+    eng=$(ecm_engine)
+    mark_avail=$(ecm_mark_classifier_available && echo "AVAILABLE" || echo "MISSING")
+    local fe_color="$FG_GREEN"
+    case "$fe" in SFE) fe_color="$FG_YELLOW";; UNKNOWN) fe_color="$FG_RED";; esac
+    local mk_color="$FG_GREEN"
+    [ "$mark_avail" = "MISSING" ] && mk_color="$FG_RED"
+
+    printf "  ${C_DIM}%-22s${C_RESET} %b${C_BOLD}%s${C_RESET}  ${C_DIM}engine=%s${C_RESET}\n" \
+        "ECM frontend:" "$fe_color" "$fe" "$eng"
+    printf "  ${C_DIM}%-22s${C_RESET} %b${C_BOLD}%s${C_RESET}\n" \
+        "Mark classifier:" "$mk_color" "$mark_avail"
+
     echo ""
-    ui_kv "Total conntrack" "$(ct_count)"
-    ui_kv "Bypassed (CPU)" "$(ct_count_bypassed)"
+    local ct_total ct_bypass
+    ct_total=$(ct_count)
+    ct_bypass=$(ct_count_bypassed)
+    ui_kv "Conntrack total"  "$ct_total"
+    printf "  ${C_DIM}%-22s${C_RESET} ${FG_ORANGE}${C_BOLD}%s${C_RESET}" "Bypassed (CPU):" "$ct_bypass"
+    if [ "$ct_total" -gt 0 ]; then
+        printf "  "
+        local prog_width=20
+        [ $TERM_COLS -gt 80 ] && prog_width=30
+        ui_progress_bar "$ct_bypass" "$ct_total" $prog_width "of total"
+    fi
+    printf "\n"
+
     echo ""
     if nft_chains_exist 2>/dev/null; then
-        ui_ok "NSS-Switch nft chains: LIVE"
+        ui_ok "NSS-Switch nft chains: ${FG_GREEN}LIVE${C_RESET}"
     else
-        ui_warn "NSS-Switch nft chains: NOT ACTIVE"
+        ui_warn "NSS-Switch nft chains: NOT ACTIVE — run: nss-switch apply"
     fi
-    ui_kv "Our mark" "$NSS_MARK"
-    echo ""
+    ui_kv "Our ct mark" "$NSS_MARK"
+
     ui_section "Active Rules"
     rules_list
 }
@@ -640,42 +704,52 @@ cmd_status() {
 # ─── HELP ─────────────────────────────────────────────────────────────────────
 cmd_help() {
     ui_banner
-    printf "\n${C_BOLD}Usage:${C_RESET}  nss-switch <command> [options]\n\n"
-    printf "${C_BOLD}Commands:${C_RESET}\n"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "watch [--once] [interval]"       "Live connection viewer (NSS vs CPU)"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "pick"                             "Interactive: pick a connection and bypass it"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "add [options]"                    "Manually add a bypass rule"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "list"                             "List all defined bypass rules"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "remove <id>"                      "Remove a bypass rule by ID"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "flush [--rules|--all|--temp]"     "Remove rules (--all removes everything)"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "apply"                            "Re-apply rules.conf to nftables"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "status"                           "Show full status"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "config [KEY] [VALUE]"             "View/set configuration"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "debug <subcommand>"               "Debug tools"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "help"                             "This help"
+    printf "\n${C_BOLD}Usage:${C_RESET}  ${FG_ACCENT}nss-switch${C_RESET} ${C_BOLD}<command>${C_RESET} [options]\n\n"
+
+    printf "${C_BOLD}${FG_BRIGHT}Commands:${C_RESET}\n"
+    _help_cmd "watch [--once] [interval]"       "Live connection monitor  ${C_DIM}(btop-style, Ctrl+C to exit, use terminal scroll)${C_RESET}"
+    _help_cmd "pick"                             "Interactive: browse connections and bypass one"
+    _help_cmd "add [options]"                    "Manually add a bypass rule"
+    _help_cmd "list"                             "List all defined bypass rules"
+    _help_cmd "remove <id>"                      "Remove a bypass rule by ID"
+    _help_cmd "flush [--rules|--all|--temp]"     "Remove rules from nftables"
+    _help_cmd "apply"                            "Re-apply rules.conf to nftables"
+    _help_cmd "status"                           "Full status dashboard"
+    _help_cmd "config [KEY] [VALUE]"             "View or set configuration"
+    _help_cmd "debug <subcommand>"               "Debug and diagnostic tools"
     printf "\n"
-    printf "${C_BOLD}add options:${C_RESET}\n"
-    printf "  %-30s %s\n" "--proto tcp|udp|icmp|any"  "Match protocol"
-    printf "  %-30s %s\n" "--src-ip <IP/CIDR>"        "Match source IP or subnet"
-    printf "  %-30s %s\n" "--dst-ip <IP/CIDR>"        "Match destination IP or subnet"
-    printf "  %-30s %s\n" "--src-port <port>"         "Match source port (tcp/udp)"
-    printf "  %-30s %s\n" "--dst-port <port>"         "Match destination port"
-    printf "  %-30s %s\n" "--iface <interface>"       "Match input interface"
-    printf "  %-30s %s\n" "--persist"                 "Survive reboot"
-    printf "  %-30s %s\n" "--temp"                    "Temporary (default)"
-    printf "  %-30s %s\n" "--comment <text>"          "Human label"
-    printf "  %-30s %s\n" "--no-defunct"              "Skip ECM defunct after adding"
+
+    printf "${C_BOLD}${FG_BRIGHT}add options:${C_RESET}\n"
+    _help_opt "--proto tcp|udp|icmp|any"  "Match protocol"
+    _help_opt "--src-ip <IP/CIDR>"        "Match source IP or subnet"
+    _help_opt "--dst-ip <IP/CIDR>"        "Match destination IP or subnet"
+    _help_opt "--src-port <port>"         "Match source port (tcp/udp)"
+    _help_opt "--dst-port <port>"         "Match destination port"
+    _help_opt "--iface <interface>"       "Match input interface  (out:<iface> for egress)"
+    _help_opt "--persist"                 "Survive reboot"
+    _help_opt "--temp"                    "Temporary, lost on reboot (default)"
+    _help_opt "--comment <text>"          "Human-readable label"
+    _help_opt "--no-defunct"             "Skip ECM defunct after adding"
     printf "\n"
-    printf "${C_BOLD}Examples:${C_RESET}\n"
-    printf "  nss-switch add --iface lan2 --persist --comment 'Deco off NSS'\n"
-    printf "  nss-switch add --src-ip 192.168.1.50 --comment 'PC off NSS'\n"
-    printf "  nss-switch add --proto tcp --dst-port 22 --temp\n"
-    printf "  nss-switch watch\n"
-    printf "  nss-switch pick\n"
-    printf "  nss-switch debug env\n"
+
+    printf "${C_BOLD}${FG_BRIGHT}Examples:${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch add --iface lan2 --persist --comment 'Deco off NSS'${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch add --src-ip 192.168.1.50 --comment 'PC off NSS'${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch add --proto tcp --dst-port 22 --temp${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch watch${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch pick${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch debug env${C_RESET}\n"
     printf "\n"
     cmd_debug_help
     printf "\n"
+}
+
+_help_cmd() {
+    printf "  ${FG_ACCENT}${C_BOLD}%-36s${C_RESET}  %b\n" "$1" "$2"
+}
+
+_help_opt() {
+    printf "  ${C_DIM}%-32s${C_RESET}  %s\n" "$1" "$2"
 }
 
 # ─── MAIN DISPATCHER ──────────────────────────────────────────────────────────
@@ -700,4 +774,3 @@ case "$COMMAND" in
         exit 1
         ;;
 esac
-

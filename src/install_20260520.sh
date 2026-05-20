@@ -94,146 +94,186 @@ check_root() {
 # ─── Log every invocation ────────────────────────────────────────────────────
 dbg "Invoked: $0 $*"
 
-# ─── Clean tmp files in each exec ────────────────────────────────────────────
+# ─── Clean tmp files ─────────────────────────────────────────────────────────
 _clean_tmp() {
     rm -f /tmp/nss-switch-pick.* 2>/dev/null
+    rm -f /tmp/nss-switch-watch.* 2>/dev/null
     rm -f /tmp/nss-ifmap.* 2>/dev/null
+    rm -f /tmp/nss-switch-exit.* 2>/dev/null
 }
-trap _clean_tmp INT TERM EXIT
+trap '_clean_tmp' EXIT
 
 # ─── COMMAND: watch ───────────────────────────────────────────────────────────
 cmd_watch() {
     check_root
+
     local interval="${1:-$WATCH_INTERVAL}"
     local once=0
     [ "$1" = "--once" ] && { once=1; interval=0; }
 
-    while true; do
-        clear
-        ui_banner
-        printf "${C_DIM}Refresh: ${interval}s  |  Press Ctrl+C to exit  |  %s${C_RESET}\n" "$(date)"
-        ui_sep
+    # ── Ctrl+C fix ──────────────────────────────────────────────────────────
+    local _watch_exit=0
+    local _watch_tmp
+    _watch_tmp=$(mktemp /tmp/nss-switch-watch.XXXXXX)
 
-        local total bypassed
-        total=$(ct_count)
-        bypassed=$(ct_count_bypassed)
-        ui_kv "Total connections" "$total"
-        ui_kv "NSS-bypassed (CPU)" "$bypassed"
-        ui_kv "NSS frontend" "$(ecm_frontend)  engine=$(ecm_engine)"
-        ui_sep
+    # Trap: clean up and exit
+    trap '
+        _watch_exit=1
+        # Show cursor again
+        printf "\033[?25h"
+        rm -f "$_watch_tmp"
+        printf "\n"
+        trap - INT TERM
+        exit 0
+    ' INT TERM
+
+    # Hide cursor (but NO alt_screen)
+    printf "\033[?25l"
+
+    # ── First run: show loading indicator ───────────────────────────────────
+    ui_clear_screen
+    ui_cursor_home
+    ui_header_bar "NSS-Switch" "Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
+    printf "\n  ${FG_ACCENT}⠋${C_RESET}  Loading connections…\n"
+
+    # Dump outside any pipe — fills tmpfile, no subshell issues
+    ct_dump_all_full > "$_watch_tmp" 2>/dev/null
+
+    local total bypassed rules
+    total=$(ct_count)
+    bypassed=$(ct_count_bypassed)
+    rules=$(rules_count 2>/dev/null || echo 0)
+
+    # Function to render the full display
+    _render_watch() {
+        ui_clear_screen
+        ui_cursor_home
+
+        ui_header_bar "NSS-Switch" "Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
+        ui_hint_bar "Ctrl+C exit  •  refresh every ${interval}s  •  ${ARROW} connections below  •  Use PgUp/PgDown or mouse to scroll"
+
+        ui_watch_stats_panel "$total" "$bypassed" \
+            "$(ecm_frontend)" "$(ecm_engine)" "$rules" "$interval"
 
         ui_conn_header
-        ct_dump_all_full | while IFS='|' read -r n proto src dst iface nss bypass mark state; do
-            local src_ip src_port dst_ip dst_port src_short dst_short
-            src_ip=$(echo "$src" | cut -d'#' -f1)
-            src_port=$(echo "$src" | cut -d'#' -f2)
-            dst_ip=$(echo "$dst" | cut -d'#' -f1)
-            dst_port=$(echo "$dst" | cut -d'#' -f2)
-            if echo "$src_ip" | grep -q ":"; then
-                src_short="[${src_ip}]:${src_port}"
-            else
-                src_short="${src_ip}:${src_port}"
-            fi
-            if echo "$dst_ip" | grep -q ":"; then
-                dst_short="[${dst_ip}]:${dst_port}"
-            else
-                dst_short="${dst_ip}:${dst_port}"
-            fi
-            ui_conn_row "$n" "$proto" "$src_short" "$dst_short" "$iface" "$nss" "$bypass"
-        done
 
-        [ "$once" = "1" ] && break
+        # Read from tmpfile — no pipe, so INT trap reaches parent correctly
+        while IFS='|' read -r n proto src dst iface nss bypass mark state; do
+            local sip sp dip dp ss ds
+            sip=$(echo "$src" | cut -d'#' -f1)
+            sp=$(echo "$src"  | cut -d'#' -f2)
+            dip=$(echo "$dst" | cut -d'#' -f1)
+            dp=$(echo "$dst"  | cut -d'#' -f2)
+            if echo "$sip" | grep -q ":"; then ss="[${sip}]:${sp}"; else ss="${sip}:${sp}"; fi
+            if echo "$dip" | grep -q ":"; then ds="[${dip}]:${dp}"; else ds="${dip}:${dp}"; fi
+            ui_conn_row "$n" "$proto" "$ss" "$ds" "$iface" "$nss" "$bypass"
+        done < "$_watch_tmp"
+
+        ui_sep
+
+        local file_total
+        file_total=$(wc -l < "$_watch_tmp" 2>/dev/null || echo 0)
+
+        # Show warning if terminal too narrow for IPv6
+        if [ $TERM_COLS -lt 120 ] && [ $file_total -gt 0 ]; then
+            printf "  ${FG_YELLOW}${WARN_SYM}${C_RESET} ${C_DIM}Terminal narrow (${TERM_COLS}c), long IPv6 addresses may be truncated. Use wider terminal for full visibility.${C_RESET}\n"
+        else
+            printf "  ${C_DIM}Total connections: %d  •  Use PgUp/PgDown or mouse to scroll${C_RESET}\n" "$file_total"
+        fi
+    }
+
+    # Render first time
+    _render_watch
+
+    [ "$_watch_exit" -eq 1 ] && { printf "\033[?25h"; rm -f "$_watch_tmp"; trap - INT TERM; return 0; }
+    [ "$once"        -eq 1 ] && { printf "\033[?25h"; rm -f "$_watch_tmp"; trap - INT TERM; return 0; }
+
+    # ── Main loop (subsequent refreshes) ────────────────────────────────────
+    while [ "$_watch_exit" -eq 0 ]; do
         sleep "$interval"
+        [ "$_watch_exit" -eq 1 ] && break
+
+        ui_get_term_size
+
+        # Refresh data
+        ct_dump_all_full > "$_watch_tmp" 2>/dev/null
+        total=$(ct_count)
+        bypassed=$(ct_count_bypassed)
+        rules=$(rules_count 2>/dev/null || echo 0)
+
+        # Re-render
+        _render_watch
+
+        [ "$once" -eq 1 ] && break
     done
+
+    # Show cursor again before exit
+    printf "\033[?25h"
+    rm -f "$_watch_tmp"
+    trap - INT TERM
 }
+
 
 # ─── COMMAND: pick ────────────────────────────────────────────────────────────
 cmd_pick() {
     check_root
-    ui_banner
-    ui_section "Connection Picker | Loading ..."
 
-    local tmpfile
-    tmpfile=$(mktemp /tmp/nss-switch-pick.XXXXXX)
+    local _pick_tmp
+    _pick_tmp=$(mktemp /tmp/nss-switch-pick.XXXXXX)
 
-    # DEBUG trap particular
-    # trap "rm -f '$tmpfile'; trap - INT TERM EXIT; exit" INT TERM EXIT
+    local _selection_tmp
+    _selection_tmp=$(mktemp /tmp/nss-switch-selection.XXXXXX)
 
-    ct_dump_all_full > "$tmpfile"
+    # Trap for cleanup only - NO alt_screen tricks
+    trap '
+        rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        printf "\n"
+        # Ensure cursor is visible
+        printf "\033[?25h"
+        trap - INT TERM
+        exit 0
+    ' INT TERM
+
+    # NO ui_watch_init() - that enables alt_screen which we don't want for pick
+    # Just clear screen and show the picker normally
+
+    ui_clear_screen
+    ui_cursor_home
+    ui_header_bar "NSS-Switch" "Connection Picker" "$(date +'%H:%M:%S')"
+    printf "\n  ${FG_ACCENT}⠋${C_RESET}  Loading connections…\n"
+
+    ct_dump_all_full > "$_pick_tmp" 2>/dev/null
 
     local total
-    total=$(wc -l < "$tmpfile")
+    total=$(wc -l < "$_pick_tmp" 2>/dev/null || echo 0)
+
     if [ "$total" -eq 0 ]; then
+        rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        trap - INT TERM
         ui_warn "No connections found in conntrack"
-        rm -f "$tmpfile"
         return 0
     fi
 
-# DEBUG:    Pendiente reparar awk con la sintax de ash busybox
-#     ui_conn_header
-#     while IFS='|' read -r num proto src dst iface nss bypass mark state; do
-#         src_ip=$(echo "$src" | cut -d'#' -f1)
-#         src_port=$(echo "$src" | cut -d'#' -f2)
-#         dst_ip=$(echo "$dst" | cut -d'#' -f1)
-#         dst_port=$(echo "$dst" | cut -d'#' -f2)
-#
-#         if echo "$src_ip" | grep -q ":"; then
-#             src_display="[${src_ip}]:${src_port}"
-#         else
-#             src_display="${src_ip}:${src_port}"
-#         fi
-#         if echo "$dst_ip" | grep -q ":"; then
-#             dst_display="[${dst_ip}]:${dst_port}"
-#         else
-#             dst_display="${dst_ip}:${dst_port}"
-#         fi
-#
-#         printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n" \
-#             "$num" "$proto" "$src_display" "$dst_display" "$iface" "$nss" "$bypass"
-#     done < "$tmpfile"
-#     ui_sep
-    ui_conn_header
-    while IFS='|' read -r n proto src dst iface nss bypass mark state; do
-        local src_ip src_port dst_ip dst_port src_short dst_short
-        src_ip=$(echo "$src" | cut -d'#' -f1)
-        src_port=$(echo "$src" | cut -d'#' -f2)
-        dst_ip=$(echo "$dst" | cut -d'#' -f1)
-        dst_port=$(echo "$dst" | cut -d'#' -f2)
+    # Make a permanent copy for the selection phase
+    cp "$_pick_tmp" "$_selection_tmp"
 
-        if echo "$src_ip" | grep -q ":"; then
-            src_short="[${src_ip}]:${src_port}"
-        else
-            src_short="${src_ip}:${src_port}"
-        fi
-        if echo "$dst_ip" | grep -q ":"; then
-            dst_short="[${dst_ip}]:${dst_port}"
-        else
-            dst_short="${dst_ip}:${dst_port}"
-        fi
+    # Display ALL connections (uses normal terminal mode, scroll works!)
+    if ! ui_pick_display_normal "$_pick_tmp" "$total"; then
+        rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        trap - INT TERM
+        ui_warn "Cancelled"
+        return 0
+    fi
 
-        ui_conn_row "$n" "$proto" "$src_short" "$dst_short" "$iface" "$nss" "$bypass"
-    done < "$tmpfile"
-    ui_sep
-#     ui_conn_header
-#     awk -F'|' '{
-#         split($3, s, "#"); split($4, d, "#")
-#         src_ip=substr(s[1],1,32)
-#         dst_ip=substr(d[1],1,32)
-#         src=(src_ip ~ /:/) ? "["src_ip"]:"s[2] : src_ip":"s[2]
-#         dst=(dst_ip ~ /:/) ? "["dst_ip"]:"d[2] : dst_ip":"d[2]
-#         printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n", $1,$2,src,dst,$5,$6,$7
-#     }' "$tmpfile"
-#     ui_sep
-
-    ui_ask_num "Select connection number to configure" 1 "$total" || {
-        rm -f "$tmpfile"
-        return 1
-    }
     local sel="$UI_NUM"
 
+    # Now read from the SELECTION tmpfile
     local conn_line
-    conn_line=$(awk -F'|' -v n="$sel" '$1==n {print; exit}' "$tmpfile")
-    rm -f "$tmpfile"
+    conn_line=$(awk -F'|' -v n="$sel" '$1==n {print; exit}' "$_selection_tmp" 2>/dev/null)
+
+    # Clean up tmpfiles
+    rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+    trap - INT TERM
 
     if [ -z "$conn_line" ]; then
         ui_error "Connection $sel not found"
@@ -350,9 +390,6 @@ cmd_pick() {
     ct_clear_rule_marks "$r_proto" "$r_src_ip" "$r_dst_ip" \
         "$r_sport" "$r_dport" "$r_iface"
 
-    # DEBUG trap particular
-    # rm -f "$tmpfile"
-    # trap - INT TERM EXIT
     ui_ok "Done. Connection will be handled by CPU (not NSS) going forward."
 }
 
@@ -650,26 +687,53 @@ cmd_config() {
 # ─── COMMAND: status ──────────────────────────────────────────────────────────
 cmd_status() {
     ui_banner
-    ui_section "NSS-Switch Status"
 
-    ui_kv "Rules defined"  "$(rules_count)"
-    ui_kv "Temp rules"     "$(grep -c '|no|'  "$RULES_FILE" 2>/dev/null; true)"
-    ui_kv "Persist rules"  "$(grep -c '|yes|' "$RULES_FILE" 2>/dev/null; true)"
+    ui_section "NSS-Switch Status"
+    local r_total r_temp r_persist
+    r_total=$(rules_count)
+    r_temp=$(grep -c '|no|'  "$RULES_FILE" 2>/dev/null || echo 0)
+    r_persist=$(grep -c '|yes|' "$RULES_FILE" 2>/dev/null || echo 0)
+
+    ui_kv "Rules defined"  "$r_total  (${r_persist} persist, ${r_temp} temp)"
+    ui_kv "Rules file"     "$RULES_FILE"
+
     echo ""
-    ui_kv "ECM frontend" "$(ecm_frontend)"
-    ui_kv "ECM engine" "$(ecm_engine)"
-    ui_kv "Mark classifier" "$(ecm_mark_classifier_available && echo 'AVAILABLE' || echo 'MISSING')"
+    local fe eng mark_avail
+    fe=$(ecm_frontend)
+    eng=$(ecm_engine)
+    mark_avail=$(ecm_mark_classifier_available && echo "AVAILABLE" || echo "MISSING")
+    local fe_color="$FG_GREEN"
+    case "$fe" in SFE) fe_color="$FG_YELLOW";; UNKNOWN) fe_color="$FG_RED";; esac
+    local mk_color="$FG_GREEN"
+    [ "$mark_avail" = "MISSING" ] && mk_color="$FG_RED"
+
+    printf "  ${C_DIM}%-22s${C_RESET} %b${C_BOLD}%s${C_RESET}  ${C_DIM}engine=%s${C_RESET}\n" \
+        "ECM frontend:" "$fe_color" "$fe" "$eng"
+    printf "  ${C_DIM}%-22s${C_RESET} %b${C_BOLD}%s${C_RESET}\n" \
+        "Mark classifier:" "$mk_color" "$mark_avail"
+
     echo ""
-    ui_kv "Total conntrack" "$(ct_count)"
-    ui_kv "Bypassed (CPU)" "$(ct_count_bypassed)"
+    local ct_total ct_bypass
+    ct_total=$(ct_count)
+    ct_bypass=$(ct_count_bypassed)
+    ui_kv "Conntrack total"  "$ct_total"
+    printf "  ${C_DIM}%-22s${C_RESET} ${FG_ORANGE}${C_BOLD}%s${C_RESET}" "Bypassed (CPU):" "$ct_bypass"
+    if [ "$ct_total" -gt 0 ]; then
+        printf "  "
+        local prog_width=20
+        [ $TERM_COLS -gt 80 ] && prog_width=30
+        ui_progress_bar "$ct_bypass" "$ct_total" $prog_width "of total"
+    fi
+    printf "\n"
+
     echo ""
     if nft_chains_exist 2>/dev/null; then
-        ui_ok "NSS-Switch nft chains: LIVE"
+        ui_ok "NSS-Switch nft chains: ${FG_GREEN}LIVE${C_RESET}"
     else
-        ui_warn "NSS-Switch nft chains: NOT ACTIVE"
+        ui_warn "NSS-Switch nft chains: NOT ACTIVE — run: nss-switch apply"
     fi
-    ui_kv "Our mark" "$NSS_MARK"
-    echo ""
+    ui_kv "Our ct mark" "$NSS_MARK"
+
     ui_section "Active Rules"
     rules_list
 }
@@ -677,42 +741,52 @@ cmd_status() {
 # ─── HELP ─────────────────────────────────────────────────────────────────────
 cmd_help() {
     ui_banner
-    printf "\n${C_BOLD}Usage:${C_RESET}  nss-switch <command> [options]\n\n"
-    printf "${C_BOLD}Commands:${C_RESET}\n"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "watch [--once] [interval]"       "Live connection viewer (NSS vs CPU)"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "pick"                             "Interactive: pick a connection and bypass it"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "add [options]"                    "Manually add a bypass rule"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "list"                             "List all defined bypass rules"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "remove <id>"                      "Remove a bypass rule by ID"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "flush [--rules|--all|--temp]"     "Remove rules (--all removes everything)"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "apply"                            "Re-apply rules.conf to nftables"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "status"                           "Show full status"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "config [KEY] [VALUE]"             "View/set configuration"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "debug <subcommand>"               "Debug tools"
-    printf "  ${C_CYAN}%-35s${C_RESET} %s\n" "help"                             "This help"
+    printf "\n${C_BOLD}Usage:${C_RESET}  ${FG_ACCENT}nss-switch${C_RESET} ${C_BOLD}<command>${C_RESET} [options]\n\n"
+
+    printf "${C_BOLD}${FG_BRIGHT}Commands:${C_RESET}\n"
+    _help_cmd "watch [--once] [interval]"       "Live connection monitor  ${C_DIM}(btop-style, Ctrl+C to exit, use terminal scroll)${C_RESET}"
+    _help_cmd "pick"                             "Interactive: browse connections and bypass one"
+    _help_cmd "add [options]"                    "Manually add a bypass rule"
+    _help_cmd "list"                             "List all defined bypass rules"
+    _help_cmd "remove <id>"                      "Remove a bypass rule by ID"
+    _help_cmd "flush [--rules|--all|--temp]"     "Remove rules from nftables"
+    _help_cmd "apply"                            "Re-apply rules.conf to nftables"
+    _help_cmd "status"                           "Full status dashboard"
+    _help_cmd "config [KEY] [VALUE]"             "View or set configuration"
+    _help_cmd "debug <subcommand>"               "Debug and diagnostic tools"
     printf "\n"
-    printf "${C_BOLD}add options:${C_RESET}\n"
-    printf "  %-30s %s\n" "--proto tcp|udp|icmp|any"  "Match protocol"
-    printf "  %-30s %s\n" "--src-ip <IP/CIDR>"        "Match source IP or subnet"
-    printf "  %-30s %s\n" "--dst-ip <IP/CIDR>"        "Match destination IP or subnet"
-    printf "  %-30s %s\n" "--src-port <port>"         "Match source port (tcp/udp)"
-    printf "  %-30s %s\n" "--dst-port <port>"         "Match destination port"
-    printf "  %-30s %s\n" "--iface <interface>"       "Match input interface"
-    printf "  %-30s %s\n" "--persist"                 "Survive reboot"
-    printf "  %-30s %s\n" "--temp"                    "Temporary (default)"
-    printf "  %-30s %s\n" "--comment <text>"          "Human label"
-    printf "  %-30s %s\n" "--no-defunct"              "Skip ECM defunct after adding"
+
+    printf "${C_BOLD}${FG_BRIGHT}add options:${C_RESET}\n"
+    _help_opt "--proto tcp|udp|icmp|any"  "Match protocol"
+    _help_opt "--src-ip <IP/CIDR>"        "Match source IP or subnet"
+    _help_opt "--dst-ip <IP/CIDR>"        "Match destination IP or subnet"
+    _help_opt "--src-port <port>"         "Match source port (tcp/udp)"
+    _help_opt "--dst-port <port>"         "Match destination port"
+    _help_opt "--iface <interface>"       "Match input interface  (out:<iface> for egress)"
+    _help_opt "--persist"                 "Survive reboot"
+    _help_opt "--temp"                    "Temporary, lost on reboot (default)"
+    _help_opt "--comment <text>"          "Human-readable label"
+    _help_opt "--no-defunct"             "Skip ECM defunct after adding"
     printf "\n"
-    printf "${C_BOLD}Examples:${C_RESET}\n"
-    printf "  nss-switch add --iface lan2 --persist --comment 'Deco off NSS'\n"
-    printf "  nss-switch add --src-ip 192.168.1.50 --comment 'PC off NSS'\n"
-    printf "  nss-switch add --proto tcp --dst-port 22 --temp\n"
-    printf "  nss-switch watch\n"
-    printf "  nss-switch pick\n"
-    printf "  nss-switch debug env\n"
+
+    printf "${C_BOLD}${FG_BRIGHT}Examples:${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch add --iface lan2 --persist --comment 'Deco off NSS'${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch add --src-ip 192.168.1.50 --comment 'PC off NSS'${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch add --proto tcp --dst-port 22 --temp${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch watch${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch pick${C_RESET}\n"
+    printf "  ${FG_ACCENT}nss-switch debug env${C_RESET}\n"
     printf "\n"
     cmd_debug_help
     printf "\n"
+}
+
+_help_cmd() {
+    printf "  ${FG_ACCENT}${C_BOLD}%-36s${C_RESET}  %b\n" "$1" "$2"
+}
+
+_help_opt() {
+    printf "  ${C_DIM}%-32s${C_RESET}  %s\n" "$1" "$2"
 }
 
 # ─── MAIN DISPATCHER ──────────────────────────────────────────────────────────
@@ -737,6 +811,7 @@ case "$COMMAND" in
         exit 1
         ;;
 esac
+
 
 EOF
 ok "nss-switch.sh created"
@@ -784,173 +859,551 @@ ok "config created"
 # ──────────────────────────────────────────────────────────────────────────────
 cat > "$INSTALL_DIR/lib/ui.sh" << 'EOF'
 #!/usr/bin/env ash
-# lib/ui.sh — UI helpers: colors, tables, interactive prompts
+# lib/ui.sh — UI helpers: TUI dashboard, colors, interactive prompts
 # NSS-Switch — ASH compatible, BusyBox v1.37+
+# Features: dynamic terminal size, btop-style layout, proper Ctrl+C handling
+
+# ─── Column width configuration (unified for all tables) ─────────────────────
+# IPv6 max compressed: 39 chars + []:port = ~45-50 chars
+# FIXED widths - NO dynamic calculation that truncates IPv6
+UI_SRC_WIDTH=38
+UI_DST_WIDTH=38
+UI_NUM_WIDTH=4
+UI_PROTO_WIDTH=6
+UI_IFACE_WIDTH=15
+UI_NSS_WIDTH=4
+UI_BYPASS_WIDTH=6
+
+
+# ─── Terminal geometry ────────────────────────────────────────────────────────
+ui_get_term_size() {
+    local sz
+    sz=$(stty size 2>/dev/null)
+    if [ -n "$sz" ]; then
+        TERM_ROWS=$(echo "$sz" | cut -d' ' -f1)
+        TERM_COLS=$(echo "$sz" | cut -d' ' -f2)
+    else
+        TERM_ROWS=24
+        TERM_COLS=80
+    fi
+    [ "$TERM_ROWS" -lt 10 ] && TERM_ROWS=10
+    [ "$TERM_COLS" -lt 40 ] && TERM_COLS=40
+}
+
+# ─── ANSI escape shortcuts ────────────────────────────────────────────────────
+ui_cursor_home()    { printf '\033[H'; }
+ui_cursor_pos()     { printf '\033[%d;%dH' "$1" "$2"; }
+ui_cursor_hide()    { printf '\033[?25l'; }
+ui_cursor_show()    { printf '\033[?25h'; }
+ui_clear_screen()   { printf '\033[2J'; }
+ui_alt_screen_on()  { printf '\033[?1049h'; }
+ui_alt_screen_off() { printf '\033[?1049l'; }
+ui_clear_eol()      { printf '\033[K'; }
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
-    C_RED='\033[0;31m'
-    C_GREEN='\033[0;32m'
-    C_YELLOW='\033[0;33m'
-    C_BLUE='\033[0;34m'
-    C_CYAN='\033[0;36m'
-    C_BOLD='\033[1m'
-    C_DIM='\033[2m'
-    C_RESET='\033[0m'
+    ESC=$(printf '\033')
+    C_RED="${ESC}[0;31m"
+    C_GREEN="${ESC}[0;32m"
+    C_YELLOW="${ESC}[0;33m"
+    C_BLUE="${ESC}[0;34m"
+    C_MAGENTA="${ESC}[0;35m"
+    C_CYAN="${ESC}[0;36m"
+    C_BOLD="${ESC}[1m"
+    C_DIM="${ESC}[2m"
+    C_ITALIC="${ESC}[3m"
+    C_UNDER="${ESC}[4m"
+    C_INVERT="${ESC}[7m"
+    C_RESET="${ESC}[0m"
+    BG_DARK="${ESC}[48;2;12;18;28m"
+    BG_MED="${ESC}[48;2;22;32;48m"
+    BG_ACCENT="${ESC}[48;2;0;70;110m"
+    BG_GREEN="${ESC}[48;2;0;70;35m"
+    BG_RED="${ESC}[48;2;90;18;18m"
+    BG_YELLOW="${ESC}[48;2;80;60;0m"
+    FG_BRIGHT="${ESC}[38;2;200;225;255m"
+    FG_DIM="${ESC}[38;2;70;90;115m"
+    FG_ACCENT="${ESC}[38;2;60;190;255m"
+    FG_GREEN="${ESC}[38;2;70;210;110m"
+    FG_RED="${ESC}[38;2;255;90;90m"
+    FG_YELLOW="${ESC}[38;2;255;195;70m"
+    FG_ORANGE="${ESC}[38;2;255;135;35m"
 else
-    C_RED='' C_GREEN='' C_YELLOW='' C_BLUE='' C_CYAN=''
-    C_BOLD='' C_DIM='' C_RESET=''
+    C_RED='' C_GREEN='' C_YELLOW='' C_BLUE='' C_MAGENTA=''
+    C_CYAN='' C_BOLD='' C_DIM='' C_ITALIC='' C_UNDER='' C_INVERT='' C_RESET=''
+    BG_DARK='' BG_MED='' BG_ACCENT='' BG_GREEN='' BG_RED='' BG_YELLOW=''
+    FG_BRIGHT='' FG_DIM='' FG_ACCENT='' FG_GREEN='' FG_RED='' FG_YELLOW=''
+    FG_ORANGE=''
 fi
 
+
+# ui_calc_column_widths() {
+#     ui_get_term_size 2>/dev/null || true
+#     local available=$(( TERM_COLS - UI_FIXED_WIDTH ))
+#
+#     # Give BOTH columns the same minimum width to avoid truncation
+#     # If terminal is too narrow, we'll show a warning but at least try
+#     local needed=$(( UI_MIN_SRC_WIDTH + UI_MIN_DST_WIDTH ))
+#
+#     if [ $available -ge $needed ]; then
+#         # Enough space - give both columns their minimum
+#         UI_SRC_WIDTH=$UI_MIN_SRC_WIDTH
+#         UI_DST_WIDTH=$UI_MIN_DST_WIDTH
+#         # Distribute any extra space evenly
+#         local extra=$(( available - needed ))
+#         UI_SRC_WIDTH=$(( UI_SRC_WIDTH + extra/2 ))
+#         UI_DST_WIDTH=$(( UI_DST_WIDTH + extra - extra/2 ))
+#     else
+#         # Terminal too narrow - give equal share of available space
+#         local share=$(( available / 2 ))
+#         UI_SRC_WIDTH=$share
+#         UI_DST_WIDTH=$share
+#         # Ensure at least 25 chars each (enough for basic IPv4)
+#         [ $UI_SRC_WIDTH -lt 25 ] && UI_SRC_WIDTH=25
+#         [ $UI_DST_WIDTH -lt 25 ] && UI_DST_WIDTH=25
+#     fi
+#
+#     # Final safety: never exceed terminal width
+#     local total=$(( UI_FIXED_WIDTH + UI_SRC_WIDTH + UI_DST_WIDTH ))
+#     if [ $total -gt $TERM_COLS ] && [ $TERM_COLS -ge 80 ]; then
+#         local overflow=$(( total - TERM_COLS ))
+#         # Reduce both columns equally
+#         UI_DST_WIDTH=$(( UI_DST_WIDTH - overflow/2 ))
+#         UI_SRC_WIDTH=$(( UI_SRC_WIDTH - (overflow - overflow/2) ))
+#         [ $UI_SRC_WIDTH -lt 20 ] && UI_SRC_WIDTH=20
+#         [ $UI_DST_WIDTH -lt 20 ] && UI_DST_WIDTH=20
+#     fi
+# }
+
+
+# ─── Box-drawing chars ────────────────────────────────────────────────────────
+BOX_TL='╔' BOX_TR='╗' BOX_BL='╚' BOX_BR='╝'
+BOX_H='═'  BOX_V='║'
+BOX_ML='╠' BOX_MR='╣'
+SLIM_TL='┌' SLIM_TR='┐' SLIM_BL='└' SLIM_BR='┘'
+SLIM_H='─'  SLIM_V='│'
+SLIM_ML='├' SLIM_MR='┤'
+TICK='✓' CROSS='✗' WARN_SYM='⚠' INFO_SYM='ℹ' ARROW='▶' DOT='•'
+BAR_FULL='█' BAR_EMPTY='░'
+
+# ─── Internal: repeat char N times ───────────────────────────────────────────
+_rep() {
+    local char="$1" n="$2" i=0
+    while [ "$i" -lt "$n" ]; do
+        printf '%s' "$char"
+        i=$((i+1))
+    done
+}
+
 # ─── Print helpers ────────────────────────────────────────────────────────────
-ui_info()    { printf "${C_CYAN}[INFO]${C_RESET}  %s\n" "$*"; }
-ui_ok()      { printf "${C_GREEN}[ OK ]${C_RESET}  %s\n" "$*"; }
-ui_warn()    { printf "${C_YELLOW}[WARN]${C_RESET}  %s\n" "$*"; }
-ui_error()   { printf "${C_RED}[ERR ]${C_RESET}  %s\n" "$*" >&2; }
-ui_debug()   { printf "${C_DIM}[DBG ]  %s${C_RESET}\n" "$*"; }
-ui_section() { printf "\n${C_BOLD}${C_BLUE}══ %s ══${C_RESET}\n" "$*"; }
-ui_bold()    { printf "${C_BOLD}%s${C_RESET}\n" "$*"; }
+ui_info()  { printf "${FG_ACCENT}${INFO_SYM}${C_RESET}  %s\n" "$*"; }
+ui_ok()    { printf "${FG_GREEN}${TICK}${C_RESET}  %s\n" "$*"; }
+ui_warn()  { printf "${FG_YELLOW}${WARN_SYM}${C_RESET}  %s\n" "$*"; }
+ui_error() { printf "${FG_RED}${CROSS}${C_RESET}  %s\n" "$*" >&2; }
+ui_debug() { printf "${C_DIM}[DBG]  %s${C_RESET}\n" "$*"; }
+ui_bold()  { printf "${C_BOLD}%s${C_RESET}\n" "$*"; }
+
+ui_section() {
+    ui_get_term_size 2>/dev/null || true
+    local title="$*" w="${TERM_COLS:-80}"
+    printf "\n${FG_ACCENT}${SLIM_ML}"
+    _rep "$SLIM_H" 2
+    printf " ${C_BOLD}${FG_BRIGHT}%s${C_RESET}${FG_ACCENT} " "$title"
+    local used=$(( ${#title} + 6 ))
+    local remain=$(( w - used - 1 ))
+    [ "$remain" -gt 0 ] && _rep "$SLIM_H" "$remain"
+    printf "${SLIM_MR}${C_RESET}\n"
+}
+
+ui_sep() {
+    ui_get_term_size 2>/dev/null || true
+    printf "${FG_DIM}"
+    _rep "$SLIM_H" "${TERM_COLS:-80}"
+    printf "${C_RESET}\n"
+}
+
+ui_kv() {
+    printf "  ${C_DIM}%-22s${C_RESET} ${C_BOLD}%s${C_RESET}\n" "${1}:" "$2"
+}
+
+# ─── Progress bar: value max width ───────────────────────────────────────────
+ui_progress_bar() {
+    local val="$1" max="$2" width="$3" label="${4:-}"
+    [ "$max" -le 0 ] && max=1
+    local filled=$(( val * width / max ))
+    [ "$filled" -gt "$width" ] && filled="$width"
+    local empty=$(( width - filled ))
+    local pct=$(( val * 100 / max ))
+    local color="$FG_GREEN"
+    [ "$pct" -gt 60 ] && color="$FG_YELLOW"
+    [ "$pct" -gt 85 ] && color="$FG_RED"
+    printf "${C_DIM}[${C_RESET}${color}"
+    _rep "$BAR_FULL" "$filled"
+    printf "${C_DIM}"
+    _rep "$BAR_EMPTY" "$empty"
+    printf "]${C_RESET} ${C_BOLD}%3d%%${C_RESET}" "$pct"
+    [ -n "$label" ] && printf " ${C_DIM}%s${C_RESET}" "$label"
+}
 
 # ─── Banner ───────────────────────────────────────────────────────────────────
 ui_banner() {
-    printf "${C_BOLD}${C_CYAN}"
-    printf "╔═══════════════════════════════════════╗\n"
-    printf "║         NSS-Switch  v1.0              ║\n"
-    printf "║   Qualcomm NSS selective bypass       ║\n"
-    printf "╚═══════════════════════════════════════╝\n"
+    ui_get_term_size 2>/dev/null || true
+    local w="${TERM_COLS:-80}" inner
+    inner=$(( w - 2 ))
+
+    printf "${FG_ACCENT}"
+    printf '%s' "$BOX_TL"; _rep "$BOX_H" "$inner"; printf '%s\n' "$BOX_TR"
+
+    local l1="NSS-Switch  v1.0" l2="Qualcomm NSS selective bypass"
+    local p1=$(( (inner - ${#l1}) / 2 ))
+    local p2=$(( (inner - ${#l2}) / 2 ))
+
+    printf '%s' "$BOX_V"
+    _rep ' ' "$p1"
+    printf "${C_BOLD}${FG_BRIGHT}%s${C_RESET}${FG_ACCENT}" "$l1"
+    _rep ' ' "$(( inner - p1 - ${#l1} ))"
+    printf '%s\n' "$BOX_V"
+
+    printf '%s' "$BOX_V"
+    _rep ' ' "$p2"
+    printf "${C_DIM}%s${C_RESET}${FG_ACCENT}" "$l2"
+    _rep ' ' "$(( inner - p2 - ${#l2} ))"
+    printf '%s\n' "$BOX_V"
+
+    printf '%s' "$BOX_BL"; _rep "$BOX_H" "$inner"; printf '%s\n' "$BOX_BR"
     printf "${C_RESET}"
 }
 
-# ─── Separator ────────────────────────────────────────────────────────────────
-ui_sep() {
-    printf "${C_DIM}─────────────────────────────────────────────────────────────────────────────────────────${C_RESET}\n"
+# ─── Header bar (ash-compatible) ─────────────────────────────────────────────
+ui_header_bar() {
+    local title="$1" subtitle="$2" right="$3"
+    ui_get_term_size
+    local w="$TERM_COLS"
+
+    # Truncate if too long
+    local max_title_len=$(( w / 3 ))
+    [ ${#title} -gt $max_title_len ] && title="${title:0:$((max_title_len-3))}..."
+
+    local left_len=$(( ${#title} + ${#subtitle} + 3 ))
+    local right_len=${#right}
+    local pad=$(( w - left_len - right_len - 2 ))
+    [ "$pad" -lt 1 ] && pad=1
+
+    printf '%b%b%b %s%b  %s%b' \
+        "$BG_DARK" "$FG_ACCENT" "$C_BOLD" "$title" \
+        "${C_RESET}${BG_DARK}${FG_DIM}" "$subtitle" "${C_RESET}${BG_DARK}"
+    _rep ' ' "$pad"
+    printf '%b%s %b\n' "$FG_BRIGHT" "$right" "$C_RESET"
 }
 
-# ─── Table header for connection watch ───────────────────────────────────────
+# ─── Keybind hint bar ─────────────────────────────────────────────────────────
+ui_hint_bar() {
+    local hints="$*"
+    ui_get_term_size
+    printf "${BG_DARK}${FG_DIM} %s" "$hints"
+    local used=$(( ${#hints} + 1 ))
+    local pad=$(( TERM_COLS - used ))
+    [ "$pad" -gt 0 ] && _rep ' ' "$pad"
+    printf "${C_RESET}${C_DIM}%b" "$(ui_clear_eol)"
+    printf "\n"
+}
+
+# ─── Watch stats panel ────────────────────────────────────────────────────────
+ui_watch_stats_panel() {
+    local total="$1" bypassed="$2" frontend="$3" engine="$4"
+    local rules="$5" interval="$6"
+    local normal=$(( total - bypassed ))
+
+    ui_get_term_size
+    # ui_calc_column_widths
+
+    printf "\n"
+
+    # Connections line - use full width
+    printf "  ${FG_BRIGHT}${C_BOLD}%-14s${C_RESET}" "Connections"
+    printf "  ${FG_GREEN}${C_BOLD}%d${C_RESET} total" "$total"
+    printf "  ${FG_ACCENT}${C_BOLD}%d${C_RESET} NSS/HW" "$normal"
+    printf "  ${FG_ORANGE}${C_BOLD}%d${C_RESET} CPU-bypass" "$bypassed"
+    printf "   "
+    if [ "$total" -gt 0 ]; then
+        local prog_width=$(( TERM_COLS - 70 ))
+        [ $prog_width -lt 10 ] && prog_width=10
+        [ $prog_width -gt 30 ] && prog_width=30
+        ui_progress_bar "$bypassed" "$total" $prog_width "bypass ratio"
+    else
+        printf "${C_DIM}no connections${C_RESET}"
+    fi
+    printf "\n"
+
+    # ECM line
+    printf "  ${FG_BRIGHT}${C_BOLD}%-14s${C_RESET}" "ECM"
+    local fe_color="$FG_GREEN"
+    case "$frontend" in SFE) fe_color="$FG_YELLOW" ;; UNKNOWN) fe_color="$FG_RED" ;; esac
+    printf "  ${fe_color}${C_BOLD}%s${C_RESET}" "$frontend"
+    printf "  ${C_DIM}engine=${C_RESET}${C_BOLD}%s${C_RESET}" "$engine"
+    printf "  ${C_DIM}rules=${C_RESET}${FG_ACCENT}${C_BOLD}%s${C_RESET}" "$rules"
+    printf "  ${C_DIM}refresh=${C_RESET}${C_BOLD}%ss${C_RESET}" "$interval"
+    printf "\n\n"
+}
+
+
+# ─── Connection table header ──────────────────────────────────────────────────
 ui_conn_header() {
-    printf "${C_BOLD}"
-    printf "%-4s %-6s %-40s %-40s %-17s %-5s %-8s\n" \
-        "NUM" "PROTO" "SRC" "DST" "IFACE_IN" "NSS" "BYPASS"
-    printf "${C_RESET}"
+    printf "${BG_MED}${FG_DIM}"
+    printf " %-${UI_NUM_WIDTH}s %-${UI_PROTO_WIDTH}s %-${UI_SRC_WIDTH}s %-${UI_DST_WIDTH}s %-${UI_IFACE_WIDTH}s %-${UI_NSS_WIDTH}s %-${UI_BYPASS_WIDTH}s" \
+        "NUM" "PROTO" "SOURCE" "DESTINATION" "INTERFACE" "NSS" "BYPASS"
+    printf "${C_RESET}\n"
     ui_sep
 }
 
-# ─── Print one connection row ─────────────────────────────────────────────────
-# $1=num $2=proto $3=src $4=dst $5=iface $6=nss_status $7=bypass
+
+# ─── Connection row ───────────────────────────────────────────────────────────
 ui_conn_row() {
     local num="$1" proto="$2" src="$3" dst="$4"
     local iface="$5" nss="$6" bypass="$7"
-    local nss_color="$C_GREEN"
-    local byp_color="$C_RESET"
 
-    case "$nss" in
-        HW)  nss_color="$C_GREEN"  ;;
-        SFE) nss_color="$C_YELLOW" ;;
-        CPU) nss_color="$C_RED"    ;;
+    local proto_c="$C_RESET"
+    case "$proto" in
+        tcp)   proto_c="$FG_ACCENT" ;;
+        udp)   proto_c="$FG_YELLOW" ;;
+        icmp*) proto_c="$FG_ORANGE" ;;
     esac
-    [ "$bypass" = "YES" ] && byp_color="$C_YELLOW"
 
-    printf "%-4s %-6s %-40s %-40s %-17s ${nss_color}%-5s${C_RESET} ${byp_color}%-8s${C_RESET}\n" \
-        "$num" "$proto" "$src" "$dst" "$iface" "$nss" "$bypass"
+    local nss_c
+    case "$nss" in
+        HW)  nss_c="$FG_GREEN"  ;;
+        SFE) nss_c="$FG_YELLOW" ;;
+        CPU) nss_c="$FG_RED"    ;;
+        *)   nss_c="$C_DIM"     ;;
+    esac
+
+    local byp_c byp_s
+    if [ "$bypass" = "YES" ]; then byp_c="$FG_ORANGE" byp_s="BYPASS"
+    else                           byp_c="$C_DIM"     byp_s="-"
+    fi
+
+    local iface_c="$C_RESET"
+    case "$iface" in local:*) iface_c="$C_DIM" ;; esac
+
+    # Alternate row bg
+    local row_bg=""
+    [ $(( num % 2 )) -eq 0 ] && row_bg="$BG_MED"
+
+    printf '%b %b%-*s%b%b %b%-*s%b%b' \
+        "$row_bg" "$C_BOLD" "$UI_NUM_WIDTH" "$num" "$C_RESET" "$row_bg" \
+        "$proto_c" "$UI_PROTO_WIDTH" "$proto" "$C_RESET" "$row_bg"
+    printf " %-*s %-*s " "$UI_SRC_WIDTH" "$src" "$UI_DST_WIDTH" "$dst"
+    printf '%b%-*s%b%b %b%-*s%b%b %b%-*s%b\n' \
+        "$iface_c" "$UI_IFACE_WIDTH" "$iface" "$C_RESET" "$row_bg" \
+        "$nss_c" "$UI_NSS_WIDTH" "$nss" "$C_RESET" "$row_bg" \
+        "$byp_c" "$UI_BYPASS_WIDTH" "$byp_s" "$C_RESET"
+}
+
+# ─── Rule list header/row ─────────────────────────────────────────────────────
+ui_rule_header() {
+    printf "${BG_MED}${FG_DIM}"
+    printf " %-4s %-6s %-${UI_SRC_WIDTH}s %-${UI_DST_WIDTH}s %-7s %-7s %-12s %-8s %s" \
+        "ID" "PROTO" "SRC_IP" "DST_IP" "SPORT" "DPORT" "IFACE" "PERSIST" "COMMENT"
+    printf "${C_RESET}\n"
+    ui_sep
+}
+
+ui_rule_row() {
+    local id="$1" proto="$2" src="$3" dst="$4"
+    local sport="$5" dport="$6" iface="$7" persist="$8" comment="$9"
+
+    local pc="$C_DIM" ps="temp"
+    [ "$persist" = "yes" ] && pc="$FG_GREEN" ps="persist"
+    local row_bg=""
+    [ $(( id % 2 )) -eq 0 ] && row_bg="$BG_MED"
+
+    printf '%b %b%-4s%b%b %b%-6s%b%b %-*s %-*s %-7s %-7s %-12s %b%-8s%b%b %b%s%b\n' \
+        "$row_bg" \
+        "$FG_ACCENT" "$C_BOLD" "$id" "$C_RESET" "$row_bg" \
+        "$FG_YELLOW" "$proto" "$C_RESET" "$row_bg" \
+        "$UI_SRC_WIDTH" "$src" "$UI_DST_WIDTH" "$dst" \
+        "$sport" "$dport" "$iface" \
+        "$pc" "$ps" "$C_RESET" "$row_bg" \
+        "$C_DIM" "$comment" "$C_RESET"
+}
+
+# ─── Ctrl+C safe: write dump to tmpfile before rendering ─────────────────────
+# The core problem in ash pipes: `cmd | while read` puts 'while' in a subshell.
+# Ctrl+C kills the subshell but the parent continues. Solution: tmpfile.
+# Pattern:
+#   tmpfile=$(mktemp /tmp/nss-watch.XXXXXX)
+#   ct_dump_all_full > "$tmpfile"       # dump outside the rendering loop
+#   while IFS='|' read ... < "$tmpfile" # read from file, no subshell
+#   rm -f "$tmpfile"
+
+# ─── Watch exit flag management ───────────────────────────────────────────────
+_UI_EXIT=0
+
+ui_watch_init() {
+    _UI_EXIT=0
+    ui_alt_screen_on
+    ui_cursor_hide
+}
+
+ui_watch_cleanup() {
+    ui_cursor_show
+    ui_alt_screen_off
+    rm -f /tmp/nss-switch-pick.* /tmp/nss-switch-watch.* 2>/dev/null
+}
+
+
+# ─── Pick display: show ALL connections, normal terminal mode ─────────────────
+# NO alt_screen - terminal scroll works normally
+ui_pick_display_normal() {
+    local tmpfile="$1" total="$2"
+    ui_get_term_size
+
+    while true; do
+        ui_clear_screen
+        ui_cursor_home
+
+        ui_header_bar "NSS-Switch" "Connection Picker" "$(date +'%H:%M:%S')"
+        ui_hint_bar "${ARROW} q=cancel  •  type number + Enter to select — ${total} connections total"
+        printf "\n"
+
+        ui_conn_header
+
+        # Read entire file - show ALL connections
+        local _display_tmp
+        _display_tmp=$(mktemp /tmp/nss-display.XXXXXX)
+        cat "$tmpfile" > "$_display_tmp"
+
+        while IFS='|' read -r n proto src dst iface nss bypass mark state; do
+            local sip sp dip dp ss ds
+            sip=$(echo "$src" | cut -d'#' -f1)
+            sp=$(echo "$src"  | cut -d'#' -f2)
+            dip=$(echo "$dst" | cut -d'#' -f1)
+            dp=$(echo "$dst"  | cut -d'#' -f2)
+            if echo "$sip" | grep -q ":"; then ss="[${sip}]:${sp}"; else ss="${sip}:${sp}"; fi
+            if echo "$dip" | grep -q ":"; then ds="[${dip}]:${dp}"; else ds="${dip}:${dp}"; fi
+            ui_conn_row "$n" "$proto" "$ss" "$ds" "$iface" "$nss" "$bypass"
+        done < "$_display_tmp"
+        rm -f "$_display_tmp"
+
+        ui_sep
+
+        # Warning if terminal too narrow for IPv6
+        if [ $TERM_COLS -lt 120 ] && [ $total -gt 0 ]; then
+            printf "  ${FG_YELLOW}${WARN_SYM}${C_RESET} ${C_DIM}Terminal narrow (${TERM_COLS}c), IPv6 addresses may be truncated.${C_RESET}\n"
+        fi
+
+        printf "  ${C_DIM}Total connections: %d${C_RESET}\n" "$total"
+        printf "\n  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}Enter connection number (or q to cancel):${C_RESET} "
+
+        # Simple read - no filtering, just read normally
+        # In normal terminal mode, PgUp/PgDown will NOT be captured - they will scroll
+        read -r _input
+
+        # Clean the input - remove any non-digit and non-q characters
+        local _cleaned=""
+        _cleaned=$(printf '%s' "$_input" | tr -d -c '0-9qQ')
+        _cleaned=$(echo "$_cleaned" | tr 'Q' 'q')
+
+        case "$_cleaned" in
+            q|'')
+                return 1
+                ;;
+            [0-9]*)
+                if [ "$_cleaned" -ge 1 ] 2>/dev/null && [ "$_cleaned" -le "$total" ] 2>/dev/null; then
+                    UI_NUM="$_cleaned"
+                    return 0
+                else
+                    printf "  ${FG_RED}${CROSS}${C_RESET} Out of range [1-%d] — press Enter to continue" "$total"
+                    read -r _dummy
+                fi
+                ;;
+            *)
+                if [ -n "$_cleaned" ]; then
+                    printf "  ${FG_RED}${CROSS}${C_RESET} Invalid input '%s' — press Enter to continue" "$_cleaned"
+                else
+                    printf "  ${FG_RED}${CROSS}${C_RESET} Invalid input — press Enter to continue"
+                fi
+                read -r _dummy
+                ;;
+        esac
+    done
 }
 
 # ─── Ask yes/no ───────────────────────────────────────────────────────────────
-# Returns 0 for yes, 1 for no
 ui_ask_yn() {
-    local question="$1" default="${2:-n}"
-    local hint ans
+    local question="$1" default="${2:-n}" hint ans
     case "$default" in
-        y|Y) hint="[Y/n]" ;;
-        *)   hint="[y/N]" ;;
+        y|Y) hint="${C_BOLD}Y${C_RESET}/${C_DIM}n${C_RESET}" ;;
+        *)   hint="${C_DIM}y/${C_RESET}${C_BOLD}N${C_RESET}" ;;
     esac
-    printf "${C_BOLD}%s %s: ${C_RESET}" "$question" "$hint"
+    printf "  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}%s${C_RESET} [%b]: " "$question" "$hint"
     read -r ans
     [ -z "$ans" ] && ans="$default"
-    case "$ans" in
-        y|Y|yes|YES) return 0 ;;
-        *)           return 1 ;;
-    esac
+    case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 
-# ─── Ask with options list ────────────────────────────────────────────────────
-# Usage: ui_ask_choice "Question" opt1 opt2 opt3 ...
-# Returns chosen value in UI_CHOICE
+# ─── Ask with option list ─────────────────────────────────────────────────────
 ui_ask_choice() {
     local question="$1"; shift
-    local opts="$*"
     local i=1 opt ans
-    printf "${C_BOLD}%s${C_RESET}\n" "$question"
-    for opt in $opts; do
-        printf "  ${C_CYAN}%d)${C_RESET} %s\n" "$i" "$opt"
+    printf "\n  ${C_BOLD}%s${C_RESET}\n" "$question"
+    for opt in "$@"; do
+        printf "    ${FG_ACCENT}%d)${C_RESET} %s\n" "$i" "$opt"
         i=$((i+1))
     done
-    printf "${C_BOLD}Choice [1-%d]: ${C_RESET}" "$((i-1))"
+    printf "  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}Choice [1-%d]:${C_RESET} " "$(($#))"
     read -r ans
     if ! echo "$ans" | grep -qE '^[0-9]+$'; then
-        ui_error "Invalid choice"
-        UI_CHOICE=""
-        return 1
+        ui_error "Invalid choice"; UI_CHOICE=""; return 1
     fi
     i=1
-    for opt in $opts; do
-        if [ "$i" = "$ans" ]; then
-            UI_CHOICE="$opt"
-            return 0
-        fi
+    for opt in "$@"; do
+        [ "$i" = "$ans" ] && { UI_CHOICE="$opt"; return 0; }
         i=$((i+1))
     done
-    ui_error "Choice out of range"
-    UI_CHOICE=""
-    return 1
+    ui_error "Choice out of range"; UI_CHOICE=""; return 1
 }
 
 # ─── Ask free text ────────────────────────────────────────────────────────────
-# Returns value in UI_INPUT
 ui_ask_input() {
     local question="$1" default="$2"
     if [ -n "$default" ]; then
-        printf "${C_BOLD}%s [%s]: ${C_RESET}" "$question" "$default"
+        printf "  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}%s${C_RESET} ${C_DIM}[%s]${C_RESET}: " "$question" "$default"
     else
-        printf "${C_BOLD}%s: ${C_RESET}" "$question"
+        printf "  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}%s${C_RESET}: " "$question"
     fi
     read -r UI_INPUT
     [ -z "$UI_INPUT" ] && UI_INPUT="$default"
 }
 
-# ─── Ask numeric from a range ─────────────────────────────────────────────────
-# Returns 0 and sets UI_NUM, or 1 on invalid
+# ─── Ask numeric ──────────────────────────────────────────────────────────────
 ui_ask_num() {
     local question="$1" min="$2" max="$3"
-    printf "${C_BOLD}%s [%d-%d]: ${C_RESET}" "$question" "$min" "$max"
+    printf "\n  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}%s${C_RESET} ${C_DIM}[%d-%d]${C_RESET}: " \
+        "$question" "$min" "$max"
     read -r UI_NUM
+    if [ -z "$UI_NUM" ]; then ui_error "Cancelled"; return 1; fi
     if ! echo "$UI_NUM" | grep -qE '^[0-9]+$'; then
-        ui_error "Not a number"
-        return 1
+        ui_error "Not a number: $UI_NUM"; return 1
     fi
     if [ "$UI_NUM" -lt "$min" ] || [ "$UI_NUM" -gt "$max" ]; then
-        ui_error "Out of range [$min-$max]"
-        return 1
+        ui_error "Out of range [$min-$max]"; return 1
     fi
     return 0
 }
 
-# ─── Confirm action ───────────────────────────────────────────────────────────
-ui_confirm() {
-    ui_ask_yn "$1" "n"
-}
+# ─── Confirm ─────────────────────────────────────────────────────────────────
+ui_confirm() { ui_ask_yn "$1" "n"; }
 
-# ─── Spinner for long ops ─────────────────────────────────────────────────────
+# ─── Spinner ──────────────────────────────────────────────────────────────────
 ui_spinner_start() {
-    export _SPINNER_MSG="$1"
-    export _SPINNER_PID=""
+    export _SPINNER_MSG="$1" _SPINNER_PID=""
     (
-        i=0
-        chars='|/-\'
+        local i=0
         while true; do
-            c=$(echo "$chars" | cut -c$((i%4+1)))
-            printf "\r${C_CYAN}[%s]${C_RESET} %s   " "$c" "$_SPINNER_MSG"
-            i=$((i+1))
-            sleep 0.1
+            local c; case $((i%4)) in 0)c='⠋';;1)c='⠙';;2)c='⠸';;3)c='⠴';;esac
+            printf "\r  ${FG_ACCENT}%s${C_RESET} %s   " "$c" "$_SPINNER_MSG"
+            i=$((i+1)); sleep 0.12
         done
     ) &
     _SPINNER_PID=$!
@@ -960,33 +1413,10 @@ ui_spinner_stop() {
     if [ -n "$_SPINNER_PID" ]; then
         kill "$_SPINNER_PID" 2>/dev/null
         wait "$_SPINNER_PID" 2>/dev/null
-        printf "\r                                        \r"
+        printf "\r%${TERM_COLS:-80}s\r" ""
         _SPINNER_PID=""
     fi
 }
-
-# ─── Print a key=value pair ───────────────────────────────────────────────────
-ui_kv() {
-    printf "  ${C_DIM}%-22s${C_RESET} %s\n" "$1:" "$2"
-}
-
-# ─── Print rule row for list command ─────────────────────────────────────────
-# $1=id $2=proto $3=src_ip $4=dst_ip $5=src_port $6=dst_port $7=iface $8=persist $9=comment
-ui_rule_row() {
-    local persist_col="$C_DIM"
-    [ "$8" = "yes" ] && persist_col="$C_GREEN"
-    printf "${C_BOLD}%-4s${C_RESET} %-5s %-18s %-18s %-6s %-6s %-10s ${persist_col}%-8s${C_RESET} %s\n" \
-        "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9"
-}
-
-ui_rule_header() {
-    printf "${C_BOLD}"
-    printf "%-4s %-5s %-18s %-18s %-6s %-6s %-10s %-8s %s\n" \
-        "ID" "PROTO" "SRC_IP" "DST_IP" "SPORT" "DPORT" "IFACE" "PERSIST" "COMMENT"
-    printf "${C_RESET}"
-    ui_sep
-}
-
 
 EOF
 ok "lib/ui.sh created"
