@@ -5,32 +5,85 @@
 A selective CPU bypass manager for Qualcomm NSS (Network Subsystem) on OpenWrt.  
 This tool allows you to mark specific connections so they are processed by the **CPU** instead of the **NSS hardware accelerator**.
 
-Useful (and needed) for:
+![](./DOCS/img/watch.png)
+
+Useful (and **needed**) for:
 
 - Traffic that needs deep inspection (e.g., `tcpdump`, `bandwidthd`, `snort`)
 - Debugging or troubleshooting NSS offload issues
 - Per-flow bypass rules without disabling NSS globally
 
----
-
-# 🧪 Status
-
-| Component | Status |
-|---|---|
-| `ipq807x` (e.g., Xiaomi AX3600) | ✅ Fully tested and functional |
-| Other NSS SoCs (`ipq607x`, `ipq501x`) | ❌ Not tested , no hardware available for development |
-| ECM frontend detection | ✅ Works with Hardware Offloading (NSS), also Software Offloading (SFE) |
-| `nftables` + `conntrack` integration | ✅ Fully working |
-| Interactive shell UI (`watch`, `pick`) | ✅ Working with native terminal components |
-| Persistent rules | ✅ Survive reboots via `rules.conf` and `fw4` includes |
+**No service/network restart required to bypass (hot-swapping) any NSS connection.**
 
 > 📌 See [`CHANGELOG.md`](./CHANGELOG.md) for detailed history and pending work.
 
 ---
 
+## Usage
+
+```bash
+# Bypass all traffic from a specific device
+nss-switch add --src-ip 192.168.1.50 --comment "PC off NSS"
+
+
+# Bypass SSH traffic (temporary)
+nss-switch add --proto tcp --dst-port 22 --temp
+
+# Interactive: pick a connection and create a rule
+nss-switch pick
+```
+![](./DOCS/img/pick.png)
+
+```bash
+# Live monitor with 5-second refresh
+nss-switch watch 5
+```
+![](./DOCS/img/bypassed.png)
+
+
+### 🚀 Commands
+
+| Command | Description |
+|---|---|
+| `nss-switch watch [--once] [interval]` | Live TUI monitor – refreshes every interval seconds. Use PgUp/PgDown / mouse to scroll. |
+| `nss-switch pick` | Browse all active connections interactively and create a bypass rule from the selected one. |
+| `nss-switch add [options]` | Manually add a bypass rule. |
+| `nss-switch list` | List all defined bypass rules. |
+| `nss-switch remove <id>` | Remove a bypass rule by ID. |
+| `nss-switch flush [--rules\|--all\|--temp]` | Remove rules from nftables. |
+| `nss-switch apply` | Re-apply `rules.conf` to nftables. |
+| `nss-switch status` | Show full status dashboard (ECM state, rules, conntrack). |
+| `nss-switch config [KEY] [VALUE]` | View or set configuration (`PERSIST_DEFAULT`, `DEBUG_MODE`, `WATCH_INTERVAL`). |
+| `nss-switch debug <subcmd>` | Debugging tools – see `nss-switch debug --help`. |
+
+---
+
+# ➕ `add` Options
+
+| Option | Description |
+|---|---|
+| `--proto tcp\|udp\|icmp\|any` | Match protocol |
+| `--src-ip <IP/CIDR>` | Match source IP or subnet |
+| `--dst-ip <IP/CIDR>` | Match destination IP or subnet |
+| `--src-port <port>` | Match source port (TCP/UDP) |
+| `--dst-port <port>` | Match destination port (TCP/UDP) |
+| `--iface <interface>` | Match input interface (`out:<iface>` for egress) |
+| `--persist` | Rule survives reboot |
+| `--temp` | Temporary rule (lost on reboot) |
+| `--comment <text>` | Human-readable label |
+| `--no-defunct` | Skip ECM defunct after adding |
+
+
+---
+
 # 📦 Installation on OpenWrt
 
-## Automatic (recommended)
+## Pre-requisites
+- [X] - OpenWRT +25.12 with NSS (QCA SSDK) enabled
+- [X] - Full `conntrack` / `iptables-nft` support.
+
+
+## Automatic Installation (recommended)
 
 ```bash
 # Put the install.sh into your /tmp/ and run the installer
@@ -98,55 +151,52 @@ nss-switch apply
 ```
 ---
 
-# 🚀 Commands
 
-| Command | Description |
-|---|---|
-| `nss-switch watch [--once] [interval]` | Live TUI monitor – refreshes every interval seconds. Use PgUp/PgDown / mouse to scroll. |
-| `nss-switch pick` | Browse all active connections interactively and create a bypass rule from the selected one. |
-| `nss-switch add [options]` | Manually add a bypass rule. |
-| `nss-switch list` | List all defined bypass rules. |
-| `nss-switch remove <id>` | Remove a bypass rule by ID. |
-| `nss-switch flush [--rules\|--all\|--temp]` | Remove rules from nftables. |
-| `nss-switch apply` | Re-apply `rules.conf` to nftables. |
-| `nss-switch status` | Show full status dashboard (ECM state, rules, conntrack). |
-| `nss-switch config [KEY] [VALUE]` | View or set configuration (`PERSIST_DEFAULT`, `DEBUG_MODE`, `WATCH_INTERVAL`). |
-| `nss-switch debug <subcmd>` | Debugging tools – see `nss-switch debug --help`. |
 
----
+## How it works
 
-# ➕ `add` Options
-
-| Option | Description |
-|---|---|
-| `--proto tcp\|udp\|icmp\|any` | Match protocol |
-| `--src-ip <IP/CIDR>` | Match source IP or subnet |
-| `--dst-ip <IP/CIDR>` | Match destination IP or subnet |
-| `--src-port <port>` | Match source port (TCP/UDP) |
-| `--dst-port <port>` | Match destination port (TCP/UDP) |
-| `--iface <interface>` | Match input interface (`out:<iface>` for egress) |
-| `--persist` | Rule survives reboot |
-| `--temp` | Temporary rule (lost on reboot) |
-| `--comment <text>` | Human-readable label |
-| `--no-defunct` | Skip ECM defunct after adding |
-
----
-
-# 📌 Examples
-
-```bash
-# Bypass all traffic from a specific device
-nss-switch add --src-ip 192.168.1.50 --comment "PC off NSS"
-
-# Bypass SSH traffic (temporary)
-nss-switch add --proto tcp --dst-port 22 --temp
-
-# Interactive: pick a connection and create a rule
-nss-switch pick
-
-# Live monitor with 5-second refresh
-nss-switch watch 5
 ```
+Mark 0x00010000 to desired packet -> Makes an ECM defunct -> So, CPU handles this traffic -> NSS bypass achieved
+```
+
+> NSS-Switch injects `nftables` rules into the kernel's `mangle` `pre` & `post` tables to set a specific packet mark (`0x00010000`) on matching connections. This mark is designed to not interfere with other marking schemes.
+
+1. **Marking**: When a packet matches a user-defined rule (by IP, port, interface, etc.), nftables applies the `0x00010000` mark to the packet.
+
+2. **Saving to conntrack**: A postrouting rule saves this mark to the connection tracking entry (`ct mark`), ensuring both directions of the flow carry the same mark.
+
+
+> When ECM (Enhanced Connection Manager) detects this mark in a packet, it **defuncts** the connection (to shut it down for an established NSS path), forcing an immediate re‑evaluation. The mark persists as long as the rule persist, so ECM hands the flow to the **CPU** instead of the NSS hardware accelerator as needed.
+
+
+
+3. **ECM defunct**: The Enhanced Connection Manager (ECM), which normally accelerates connections via NSS hardware, detects this mark and immediately **defuncts** the connection, forcing a full re‑evaluation.
+
+> Now, the connection is processed by the CPU, bypassing NSS acceleration entirely. 
+
+> No service restart is required, and only the marked connections are affected , and NSS continues to accelerate all other traffic normally.
+
+4. **CPU takeover**:  Because the mark persists, ECM hands the flow to the standard Linux network stack (CPU) instead of offloading it to NSS hardware.
+
+5. **Restore on reply**: A prerouting rule restores the mark from conntrack for reply packets, maintaining bypass status in both directions.
+
+
+
+---
+
+# 🧪 Status
+
+| Component | Status |
+|---|---|
+| `ipq807x` (e.g., Xiaomi AX3600) | ✅ Fully tested and functional |
+| Other NSS SoCs (`ipq607x`, `ipq501x`) | ❌ Not tested , no hardware available for development |
+| ECM frontend detection | ✅ Works with Hardware Offloading (NSS), also Software Offloading (SFE) |
+| `nftables` + `conntrack` integration | ✅ Fully working |
+| Interactive shell UI (`watch`, `pick`) | ✅ Working with native terminal components |
+| Persistent rules | ✅ Survive reboots via `rules.conf` and `fw4` includes |
+
+> 📌 See [`CHANGELOG.md`](./CHANGELOG.md) for detailed history and pending work.
+
 
 ---
 
@@ -175,5 +225,5 @@ GPL-2.0
 
 # 👏 Thanks
 
-- @AgustinLorenzo: OpenWrt NSS forks and inspiration
+- @AgustinLorenzo / @qosmio: OpenWrt NSS forks, `nss_packages`, `qca-ssdk`, and inspiration
 - Any community testers on `ipq807x` hardware
