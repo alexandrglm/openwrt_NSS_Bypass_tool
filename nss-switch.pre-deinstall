@@ -1,0 +1,3 @@
+#!/bin/ash
+# 1.0.0-r1 pre-deinstall
+/usr/bin/NSS-Switch/lifecycle/nss-switch_prerm.source
