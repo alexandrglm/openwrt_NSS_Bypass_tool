@@ -36,7 +36,6 @@ jobs:
 
       - name: Build APK
         run: |
-          cd ${{ github.workspace }}
           abuild checksum
           abuild -r
 
