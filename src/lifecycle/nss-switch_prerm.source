@@ -1,0 +1,69 @@
+#!/usr/bin/env ash
+# NSS-Switch pre-removal script
+# Runs before APK removes files
+
+NSS_MARK=0x00010000
+FIREWALL_LINK=/etc/firewall.d/nss-bypass
+FW_CONF=/etc/config/firewall
+
+log() {
+    echo "[NSS-Switch] $*" > /dev/kmsg 2>/dev/null || true
+    echo "[NSS-Switch] $*" >&2
+}
+
+log "Pre-removal starting..."
+
+# 1. Remove nftables rules (if nft available)
+if command -v nft >/dev/null 2>&1; then
+    # Remove jumps from mangle chains
+    for chain in mangle_prerouting mangle_postrouting; do
+        handles=$(nft -a list chain inet fw4 "$chain" 2>/dev/null | grep -E "jump nss_bypass_pre|jump nss_bypass_post" | grep -oE 'handle [0-9]+' | awk '{print $2}')
+        for h in $handles; do
+            nft delete rule inet fw4 "$chain" handle "$h" 2>/dev/null
+        done
+    done
+
+    # Delete our chains
+    nft delete chain inet fw4 nss_bypass_pre 2>/dev/null
+    nft delete chain inet fw4 nss_bypass_post 2>/dev/null
+
+    log "nftables rules removed"
+fi
+
+# 2. Clear conntrack marks
+if [ -f /proc/net/nf_conntrack ] && command -v conntrack >/dev/null 2>&1; then
+    conntrack -L 2>/dev/null | grep "mark=$NSS_MARK" | while read -r line; do
+        proto=$(echo "$line" | awk '{print $1}')
+        src=$(echo "$line" | grep -oE 'src=[^ ]+' | head -1 | cut -d= -f2)
+        dst=$(echo "$line" | grep -oE 'dst=[^ ]+' | head -1 | cut -d= -f2)
+        [ -n "$proto" ] && [ -n "$src" ] && [ -n "$dst" ] && \
+            conntrack -D -p "$proto" -s "$src" -d "$dst" 2>/dev/null
+    done
+    log "Conntrack marks cleared"
+fi
+
+# 3. Defunct ECM to restore normal acceleration
+if [ -f /sys/kernel/debug/ecm/ecm_db/defunct_all ]; then
+    echo 1 > /sys/kernel/debug/ecm/ecm_db/defunct_all 2>/dev/null
+    log "ECM defuncted (will re-accelerate normally)"
+fi
+
+# 4. Remove UCI include from firewall config
+if grep -q "nss_bypass_include" "$FW_CONF" 2>/dev/null; then
+    sed -i "/config include 'nss_bypass_include'/,+2d" "$FW_CONF"
+    log "UCI include removed from $FW_CONF"
+fi
+
+# 5. Remove symlinks
+rm -f /usr/bin/nss-switch 2>/dev/null
+rm -f "$FIREWALL_LINK" 2>/dev/null
+log "Symlinks removed"
+
+# 6. Restart firewall to clean up
+if [ -x /etc/init.d/firewall ]; then
+    /etc/init.d/firewall restart 2>/dev/null
+    log "Firewall restarted"
+fi
+
+log "NSS-Switch pre-removal completed successfully"
+exit 0

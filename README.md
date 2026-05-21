@@ -82,8 +82,14 @@ nss-switch watch 5
 - [X] - OpenWRT +25.12 with NSS (QCA SSDK) enabled
 - [X] - Full `conntrack` / `iptables-nft` support.
 
+## APK file
+```bash
+apk add /path/to/nss-switch-1.0.0-r1_DEBUG.apk --allow-untrusted
+```
+>  RSA public key is included in the repository/releases so they can be added to `/etc/apk/keys/` directly, making the `--allow-untrusted` flag unnecessary
 
-## Automatic Installation (recommended)
+
+## Using `install.sh` script
 
 ```bash
 # Put the install.sh into your /tmp/ and run the installer
