@@ -19,25 +19,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup APK build environment
-        run: |
-          apk add --no-cache alpine-sdk abuild
+        run: apk add --no-cache alpine-sdk abuild
 
       - name: Setup signing keys
         run: |
           mkdir -p ~/.abuild
           echo "${{ secrets.RSA_PRIVATE_KEY }}" > ~/.abuild/nss-switch.rsa
           echo "${{ secrets.RSA_PUBLIC_KEY }}" > ~/.abuild/nss-switch.rsa.pub
+          cp ~/.abuild/nss-switch.rsa.pub /etc/apk/keys/
           chmod 600 ~/.abuild/nss-switch.rsa
           chmod 644 ~/.abuild/nss-switch.rsa.pub
-          cat > ~/.abuild/abuild.conf << EOF
-          PACKAGER_PRIVKEY=~/.abuild/nss-switch.rsa
-          PACKAGER="Alexander Gomez <alexandrglm@proton.me>"
-          EOF
+          printf 'PACKAGER_PRIVKEY=%s/.abuild/nss-switch.rsa\nPACKAGER="Alexander Gomez <alexandrglm@proton.me>"\n' "$HOME" > ~/.abuild/abuild.conf
 
       - name: Build APK
         run: |
-          abuild checksum
-          abuild -r
+          git config --global --add safe.directory "$(pwd)"
+          abuild -F checksum
+          abuild -F -r
 
       - name: Get version
         id: get_version
