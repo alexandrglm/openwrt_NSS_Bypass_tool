@@ -69,8 +69,9 @@ jobs:
             ```
             > RSA public key is included in the repository/releases so it can be added to `/etc/apk/keys/` directly, making the `--allow-untrusted` flag unnecessary.
           files: |
-            packages/noarch/nss-switch-*.apk
-            nss-switch.rsa.pub
+            /github/home/packages/**/*.apk
+            ~/.abuild/nss-switch.rsa.pub
+            source.tar.gz
           prerelease: true
           draft: false
 
@@ -78,5 +79,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nss-switch-apk
-          path: packages/noarch/nss-switch-*.apk
+          path: /github/home/packages/**/*.apk
           if-no-files-found: error
