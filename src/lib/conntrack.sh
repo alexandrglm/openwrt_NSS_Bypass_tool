@@ -54,6 +54,65 @@ _ct_build_iface_map() {
     ' > "$tmpfile"
 }
 
+# ─── Normalizar nombres de interfaz para mostrar ──────────────────────────────
+_normalize_iface_display() {
+    local iface="$1"
+    case "$iface" in
+        local:pppoe-wan|pppoe-wan)
+            echo "wan"
+            ;;
+        local:br-lan|br-lan)
+            echo "lan"
+            ;;
+        local:lo|lo)
+            echo "lo"
+            ;;
+        local:lan2|lan2)
+            echo "lan2"
+            ;;
+        local:lan3|lan3)
+            echo "lan3"
+            ;;
+        wan.20|wan)
+            echo "wan"
+            ;;
+        wan_6)
+            echo "wan6"
+            ;;
+        ?)
+            echo "?"
+            ;;
+        *)
+            echo "$iface"
+            ;;
+    esac
+}
+
+# ─── Normalizar nombres de interfaz para reglas (nftables) ────────────────────
+_normalize_iface_rule() {
+    local iface="$1"
+    case "$iface" in
+        wan|wan.20|pppoe-wan|wan_6)
+            echo "pppoe-wan"
+            ;;
+        lan|br-lan)
+            echo "br-lan"
+            ;;
+        lo)
+            echo "lo"
+            ;;
+        lan2)
+            echo "lan2"
+            ;;
+        lan3)
+            echo "lan3"
+            ;;
+        *)
+            echo "$iface"
+            ;;
+    esac
+}
+
 # ─── Compress IPv6 address RFC 5952 ──────────────────────────────────────────
 _ipv6_compress() {
     echo "$1" | awk '{
@@ -263,6 +322,8 @@ ct_dump_all_full() {
         local iface
         iface=$(ct_iface_for_src "$CT_SRC")
         [ -z "$iface" ] && iface="?"
+        # Normalizar nombre de interfaz para mostrar
+        iface=$(_normalize_iface_display "$iface")
 #         local iface found=""
 #         while IFS=' ' read -r ip cidr if2; do
 #             if [ "$CT_SRC" = "$ip" ]; then

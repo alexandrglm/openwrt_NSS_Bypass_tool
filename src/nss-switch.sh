@@ -63,12 +63,18 @@ _clean_tmp() {
     rm -f /tmp/nss-switch-watch.* 2>/dev/null
     rm -f /tmp/nss-ifmap.* 2>/dev/null
     rm -f /tmp/nss-switch-exit.* 2>/dev/null
+    rm -f /tmp/nss-iface.* 2>/dev/null
+    rm -f /tmp/nss-display.* 2>/dev/null
+    rm -f /tmp/nss-page.* 2>/dev/null
 }
 trap '_clean_tmp' EXIT
 
 # ─── COMMAND: watch ───────────────────────────────────────────────────────────
 cmd_watch() {
     check_root
+
+    # PENDING
+    # ui_check_width
 
     local interval="${1:-$WATCH_INTERVAL}"
     local once=0
@@ -83,24 +89,30 @@ cmd_watch() {
     trap '
         _watch_exit=1
         # Show cursor again
-        printf "\033[?25h"
+        ui_cursor_show
+        # ui_watch_cleanup
         rm -f "$_watch_tmp"
+        rm -f /tmp/nss-iface.* 2>/dev/null
         printf "\n"
         trap - INT TERM
         exit 0
     ' INT TERM
 
     # Hide cursor (but NO alt_screen)
-    printf "\033[?25l"
+    ui_cursor_show
 
     # ── First run: show loading indicator ───────────────────────────────────
     ui_clear_screen
     ui_cursor_home
     ui_header_bar "NSS-Switch" "NSS Conntrack Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
-    printf "\n  ${FG_ACCENT}⠋${C_RESET}  Loading connections …\n"
+    printf "\n"
+    ui_spinner_start "Loading connections ..."
 
     # Dump outside any pipe — fills tmpfile, no subshell issues
     ct_dump_all_full > "$_watch_tmp" 2>/dev/null
+
+    ui_spinner_stop
+    printf "\n"
 
     local total bypassed rules
     total=$(ct_count)
@@ -109,7 +121,7 @@ cmd_watch() {
 
     # Function to render the full display
     _render_watch() {
-        printf "\033[2J\033[3J"
+        ui_clear_screen_scrollback
         # Move cursor to home without clearing - this overwrites previous content
         ui_cursor_home
 
@@ -150,14 +162,14 @@ cmd_watch() {
         fi
 
         # Clear any leftover content below the cursor position
-        printf "\033[J"
+        ui_clear_cursor_bellow
     }
 
     # Render first time
     _render_watch
 
-    [ "$_watch_exit" -eq 1 ] && { printf "\033[?25h"; rm -f "$_watch_tmp"; trap - INT TERM; return 0; }
-    [ "$once"        -eq 1 ] && { printf "\033[?25h"; rm -f "$_watch_tmp"; trap - INT TERM; return 0; }
+    [ "$_watch_exit" -eq 1 ] && { ui_cursor_show; rm -f "$_watch_tmp"; rm -f /tmp/nss-iface.* 2>/dev/null; trap - INT TERM; return 0; }
+    [ "$once"        -eq 1 ] && { ui_cursor_show; rm -f "$_watch_tmp"; rm -f /tmp/nss-iface.* 2>/dev/null; trap - INT TERM; return 0; }
 
     # ── Main loop (subsequent refreshes) ────────────────────────────────────
     while [ "$_watch_exit" -eq 0 ]; do
@@ -179,8 +191,9 @@ cmd_watch() {
     done
 
     # Show cursor again before exit
-    printf "\033[?25h"
+    ui_cursor_show
     rm -f "$_watch_tmp"
+    rm -f /tmp/nss-iface.* 2>/dev/null
     trap - INT TERM
 }
 
@@ -188,6 +201,9 @@ cmd_watch() {
 # ─── COMMAND: pick ────────────────────────────────────────────────────────────
 cmd_pick() {
     check_root
+
+    # PENDING
+    # ui_check_width
 
     local _pick_tmp
     _pick_tmp=$(mktemp /tmp/nss-switch-pick.XXXXXX)
@@ -198,9 +214,10 @@ cmd_pick() {
     # Trap for cleanup only - NO alt_screen tricks
     trap '
         rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        rm -f /tmp/nss-iface.* 2>/dev/null
         printf "\n"
         # Ensure cursor is visible
-        printf "\033[?25h"
+        ui_cursor_show
         trap - INT TERM
         exit 0
     ' INT TERM
@@ -211,15 +228,20 @@ cmd_pick() {
     ui_clear_screen
     ui_cursor_home
     ui_header_bar "NSS-Switch" "Connection Picker" "$(date +'%H:%M:%S')"
-    printf "\n  ${FG_ACCENT}⠋${C_RESET}  Loading connections…\n"
+    printf "\n"
+    ui_spinner_start "Loading connections ..."
 
     ct_dump_all_full > "$_pick_tmp" 2>/dev/null
+
+    ui_spinner_stop
+    printf "\n"
 
     local total
     total=$(wc -l < "$_pick_tmp" 2>/dev/null || echo 0)
 
     if [ "$total" -eq 0 ]; then
         rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        rm -f /tmp/nss-iface.* 2>/dev/null
         trap - INT TERM
         ui_warn "No connections found in conntrack"
         return 0
@@ -231,6 +253,7 @@ cmd_pick() {
     # Display ALL connections (uses normal terminal mode, scroll works!)
     if ! ui_pick_display_normal "$_pick_tmp" "$total"; then
         rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+        rm -f /tmp/nss-iface.* 2>/dev/null
         trap - INT TERM
         ui_warn "Cancelled"
         return 0
@@ -244,6 +267,7 @@ cmd_pick() {
 
     # Clean up tmpfiles
     rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
+    rm -f /tmp/nss-iface.* 2>/dev/null
     trap - INT TERM
 
     if [ -z "$conn_line" ]; then
@@ -342,6 +366,8 @@ cmd_pick() {
     ui_kv "Persistent" "$persist"
     ui_kv "Comment"    "$comment"
     ui_sep
+
+    rm -f /tmp/nss-iface.* 2>/dev/null
 
     if ! rules_validate "$r_proto" "$r_src_ip" "$r_dst_ip" "$r_sport" "$r_dport" "$r_iface"; then
         ui_error "Validation failed — rule not added"

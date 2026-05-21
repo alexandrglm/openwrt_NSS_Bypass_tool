@@ -11,7 +11,7 @@
 
 - [ ] **Enhance IPv6 Handling:** Improve the management, allocation, and tracking of IPv6 addresses, explicitly targeting Unique Local Addresses (ULA) and Global Unicast Addresses (GUA).
 
-- [ ] **Enhance PPPoE / WAN Interface Handling:** Currently, hot-swapping bypasses is not possible, and furthermore, interface detection within the `pick` command fails to apply a correct per-interface rule to `pppoe-wan` (it does not accurately differentiate between `lo` and `pppoe-wan`).
+- [IN PROGRESS] **Enhance PPPoE / WAN Interface Handling:** Currently, hot-swapping bypasses is not possible, and furthermore, interface detection within the `pick` command fails to apply a correct per-interface rule to `pppoe-wan` (it does not accurately differentiate between `lo` and `pppoe-wan`).
 
 - [ ] **Test NSS Acceleration Behaviour on Wi-Fi Mesh:** Investigate exactly how the NSS accelerates Wi-Fi Mesh systems (whether it operates in the same manner as local connection acceleration, either targets a specific interface or device IP... or employs a different mechanism).
 
@@ -34,6 +34,22 @@
 ---
 
 ## 2. Changelog
+
+### 21 May 2026
+* **feat(ui):**
+  * Added PROTO name mapping for common ports (SSH, HTTP, HTTPS, DNS, WG, MYSQL, PG, MONGO, REDIS, etc...) max 6 chars.
+  * Implemented terminal width check (`ui_check_width`), requires minimum 120 columns for proper UI display.
+  * Improved spinner with colour cycling animation.
+* **feat(conntrack):**
+  * Added interface normalisation functions `_normalize_iface_display` and `_normalize_iface_rule`.
+  * Normalised interface names: `local:pppoe-wan`/`pppoe-wan` -> `wan`, `local:br-lan`/`br-lan` -> `lan`, etc.
+* **fix(cleanup):**
+  * Fixed cursor not restoring after exit in `cmd_watch()` and `cmd_pick()` commands.
+  * Fixed cleanup for orphaned `/tmp/nss-iface.*` files on trap and exit.
+  * Unified temporary file cleanup in `_clean_tmp()`.
+* **fix(nft):**
+  * Added interface normalisation for rule validation and emission, now `wan`, `wan.20`, `pppoe-wan`, `wan_6` all belong to `pppoe-wan` for nftables rules.
+
 
 ### 20 May 2026
 * **fix(ui):**

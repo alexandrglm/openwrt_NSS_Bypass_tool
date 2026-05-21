@@ -86,10 +86,13 @@ _nft_emit_rule() {
         case "$iface" in
             out:*)
                 local out_iface="${iface#out:}"
+                out_iface=$(_normalize_iface_rule "$out_iface")
                 match="${match} oifname \"${out_iface}\""
                 ;;
             *)
-                match="${match} iifname \"${iface}\""
+                local norm_iface
+                norm_iface=$(_normalize_iface_rule "$iface")
+                match="${match} iifname \"${norm_iface}\""
                 ;;
         esac
     fi
@@ -318,10 +321,10 @@ nft_validate_proto() {
 }
 
 nft_validate_iface() {
-    [ "$1" = "any" ] && return 0
-    case "$1" in
-        out:*) ip link show "${1#out:}" >/dev/null 2>&1 ;;
-        *)     ip link show "$1" >/dev/null 2>&1 ;;
-    esac
+    local iface="$1"
+    [ "$iface" = "any" ] && return 0
+    local normalized
+    normalized=$(_normalize_iface_rule "$iface")
+    ip link show "$normalized" >/dev/null 2>&1
 }
 

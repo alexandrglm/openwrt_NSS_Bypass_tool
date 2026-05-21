@@ -31,14 +31,16 @@ ui_get_term_size() {
 }
 
 # ─── ANSI escape shortcuts ────────────────────────────────────────────────────
-ui_cursor_home()    { printf '\033[H'; }
-ui_cursor_pos()     { printf '\033[%d;%dH' "$1" "$2"; }
-ui_cursor_hide()    { printf '\033[?25l'; }
-ui_cursor_show()    { printf '\033[?25h'; }
-ui_clear_screen()   { printf '\033[2J'; }
-ui_alt_screen_on()  { printf '\033[?1049h'; }
-ui_alt_screen_off() { printf '\033[?1049l'; }
-ui_clear_eol()      { printf '\033[K'; }
+ui_cursor_home()                { printf '\033[H'; }
+ui_cursor_pos()                 { printf '\033[%d;%dH' "$1" "$2"; }
+ui_cursor_hide()                { printf '\033[?25l'; }
+ui_cursor_show()                { printf '\033[?25h'; }
+ui_clear_screen()               { printf '\033[2J'; }
+ui_clear_screen_scrollback()    { printf '\033[2J\033[3J'; }
+ui_alt_screen_on()              { printf '\033[?1049h'; }
+ui_alt_screen_off()             { printf '\033[?1049l'; }
+ui_clear_eol()                  { printf '\033[K'; }
+ui_clear_cursor_bellow()        { printf '\033[J'; }
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
@@ -153,6 +155,35 @@ ui_section() {
     local remain=$(( w - used - 1 ))
     [ "$remain" -gt 0 ] && _rep "$SLIM_H" "$remain"
     printf "${SLIM_MR}${C_RESET}\n"
+}
+
+
+# ─── Check terminal width ─────────────────────────────────────────────────────
+ui_check_width() {
+    ui_get_term_size
+    local min_width=120
+
+    if [ $TERM_COLS -lt $min_width ]; then
+        ui_clear_screen
+        ui_cursor_home
+
+
+        printf " Buenísima idea pero mal aplicada aún..."
+        printf "Sólo debería ver esto cuando la shell es >120px!"
+
+        # Loop hasta que el ancho sea suficiente
+        while [ $TERM_COLS -lt $min_width ]; do
+            sleep 1
+            ui_get_term_size
+        done
+
+        # Limpiar y continuar
+        ui_clear_screen
+        ui_cursor_home
+        return 0
+    fi
+
+    return 0
 }
 
 
@@ -316,17 +347,117 @@ ui_conn_header() {
     printf "${C_RESET}\n"
 }
 
+# ─── Map port to service name (max 6 chars) ───────────────────────────────────
+_proto_to_service() {
+    local proto="$1"
+    local port="$2"
+
+    # Si es ICMP, mantener como está
+    case "$proto" in
+        icmp|icmpv6)
+            echo "$proto"
+            return
+            ;;
+    esac
+
+    # Traducir por puerto
+    case "$port" in
+        22)   echo "SSH" ;;
+        25)   echo "SMTP" ;;
+        53)   echo "DNS" ;;
+        80)   echo "HTTP" ;;
+        110)  echo "POP3" ;;
+        123)  echo "NTP" ;;
+        143)  echo "IMAP" ;;
+        194)  echo "IRC" ;;
+        443)  echo "HTTPS" ;;
+        465)  echo "SMTPS" ;;
+        587)  echo "SMTP" ;;
+        853)  echo "DNS" ;;
+        993)  echo "IMAPS" ;;
+        995)  echo "POP3S" ;;
+        1433) echo "MSSQL" ;;
+        1723) echo "PPTP" ;;
+        2082) echo "CPANEL" ;;
+        2083) echo "CPANEL" ;;
+        2086) echo "WHM" ;;
+        2087) echo "WHM" ;;
+        2095) echo "WEBMAIL" ;;
+        2096) echo "WEBMAIL" ;;
+        3306) echo "MYSQL" ;;
+        3389) echo "RDP" ;;
+        5060) echo "SIP" ;;
+        5061) echo "SIPS" ;;
+        5222) echo "XMPP" ;;
+        5228) echo "GCM" ;;
+        5432) echo "PG" ;;
+        5900) echo "VNC" ;;
+        5901) echo "VNC" ;;
+        5902) echo "VNC" ;;
+        5903) echo "VNC" ;;
+        5904) echo "VNC" ;;
+        5905) echo "VNC" ;;
+        5906) echo "VNC" ;;
+        5907) echo "VNC" ;;
+        5908) echo "VNC" ;;
+        5909) echo "VNC" ;;
+        5910) echo "VNC" ;;
+        5911) echo "VNC" ;;
+        5912) echo "VNC" ;;
+        5913) echo "VNC" ;;
+        5914) echo "VNC" ;;
+        5915) echo "VNC" ;;
+        6379) echo "REDIS" ;;
+        6666) echo "IRC" ;;
+        6667) echo "IRCssl" ;;
+        8080) echo "HTTP" ;;
+        8443) echo "HTTPS" ;;
+        8888) echo "HTTP" ;;
+        9000) echo "PHP" ;;
+        9090) echo "HTTP" ;;
+        9100) echo "PJL" ;;
+        9200) echo "ES" ;;
+        9418) echo "GIT" ;;
+        11211) echo "MEMCACHE" ;;
+        27017) echo "MONGO" ;;
+        27018) echo "MONGO" ;;
+        27019) echo "MONGO" ;;
+        51820) echo "WG" ;;
+        *)
+            # Si no hay traducción, mostrar proto original
+            echo "$proto"
+            ;;
+    esac
+}
+
 
 # ─── Connection row ───────────────────────────────────────────────────────────
 ui_conn_row() {
     local num="$1" proto="$2" src="$3" dst="$4"
     local iface="$5" nss="$6" bypass="$7"
 
+    # Extraer puerto destino para la traducción
+    local dst_port
+    dst_port=$(echo "$dst" | cut -d'#' -f2)
+
+    # Traducir protocolo a nombre de servicio (si aplica)
+    local service_name
+    service_name=$(_proto_to_service "$proto" "$dst_port")
+
     local proto_c="$C_RESET"
-    case "$proto" in
-        tcp)   proto_c="$FG_ACCENT" ;;
-        udp)   proto_c="$FG_YELLOW" ;;
-        icmp*) proto_c="$FG_ORANGE" ;;
+    case "$service_name" in
+        HTTP|HTTPS)       proto_c="$FG_GREEN" ;;
+        SSH|WG)           proto_c="$FG_CYAN" ;;
+        DNS)              proto_c="$FG_YELLOW" ;;
+        MYSQL|PG|MONGO|REDIS|MEMCACHE) proto_c="$FG_MAGENTA" ;;
+        *)
+            case "$proto" in
+                tcp)   proto_c="$FG_ACCENT" ;;
+                udp)   proto_c="$FG_YELLOW" ;;
+                icmp*) proto_c="$FG_ORANGE" ;;
+                *)     proto_c="$C_RESET" ;;
+            esac
+            ;;
     esac
 
     local nss_c
@@ -351,7 +482,7 @@ ui_conn_row() {
 
     printf '%b %b%-*s%b%b %b%-*s%b%b' \
         "$row_bg" "$C_BOLD" "$UI_NUM_WIDTH" "$num" "$C_RESET" "$row_bg" \
-        "$proto_c" "$UI_PROTO_WIDTH" "$proto" "$C_RESET" "$row_bg"
+        "$proto_c" "$UI_PROTO_WIDTH" "$service_name" "$C_RESET" "$row_bg"
     printf " %-*s %-*s " "$UI_SRC_WIDTH" "$src" "$UI_DST_WIDTH" "$dst"
     printf '%b%-*s%b%b %b%-*s%b%b %b%-*s%b\n' \
         "$iface_c" "$UI_IFACE_WIDTH" "$iface" "$C_RESET" "$row_bg" \
@@ -401,16 +532,17 @@ _UI_EXIT=0
 
 ui_watch_init() {
     _UI_EXIT=0
-    ui_alt_screen_on
+    # ui_alt_screen_on
     ui_cursor_hide
 }
 
 ui_watch_cleanup() {
-    ui_cursor_show
-    ui_alt_screen_off
+    ui_cursor_show      # Mostrar cursor
+    ui_clear_screen_scrollback # Limpia screen y scrollback
+    ui_cursor_home         # Ir a home
     rm -f /tmp/nss-switch-pick.* /tmp/nss-switch-watch.* 2>/dev/null
+    rm -f /tmp/nss-iface.* 2>/dev/null
 }
-
 
 # ─── Pick display: show ALL connections, normal terminal mode ─────────────────
 # NO alt_screen - terminal scroll works normally
@@ -556,14 +688,22 @@ ui_ask_num() {
 ui_confirm() { ui_ask_yn "$1" "n"; }
 
 # ─── Spinner ──────────────────────────────────────────────────────────────────
+# ─── Spinner with color cycling ──────────────────────────────────────────────
 ui_spinner_start() {
     export _SPINNER_MSG="$1" _SPINNER_PID=""
     (
         local i=0
         while true; do
-            local c; case $((i%4)) in 0)c='⠋';;1)c='⠙';;2)c='⠸';;3)c='⠴';;esac
-            printf "\r  ${FG_ACCENT}%s${C_RESET} %s   " "$c" "$_SPINNER_MSG"
-            i=$((i+1)); sleep 0.12
+            local c color
+            case $((i % 4)) in
+                0) c='⠋' ; color="$FG_ACCENT" ;;
+                1) c='⠙' ; color="$FG_GREEN" ;;
+                2) c='⠸' ; color="$FG_YELLOW" ;;
+                3) c='⠴' ; color="$FG_BRIGHT" ;;
+            esac
+            printf "\r  ${color}%s${C_RESET} ${C_DIM}%s${C_RESET}   " "$c" "$_SPINNER_MSG"
+            i=$((i + 1))
+            sleep 1
         done
     ) &
     _SPINNER_PID=$!
