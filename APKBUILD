@@ -5,10 +5,10 @@ pkgrel=1
 pkgdesc="Qualcomm NSS Bypass tool"
 url="https://github.com/alexandrglm/openwrt_NSS_Bypass_tool"
 arch="noarch"
-license="MIT"
+license="GPL"
 depends=""
 makedepends=""
-options="!check !strip !scanelf"
+options="!check !strip !scanelf !checkdepends !default_install"
 source="source.tar.gz"
 install="nss-switch.post-install nss-switch.pre-deinstall"
 
@@ -46,5 +46,5 @@ package() {
     install -Dm755 "$builddir/usr/bin/NSS-Switch/lifecycle/nss-switch_prerm.source" "$pkgdir/usr/bin/NSS-Switch/lifecycle/nss-switch_prerm.source"
 }
 sha512sums="
-f9b402d24998d9ffa7f7ca6aaeada3ee1f9fd938e9826850576f259c8897cc12a65ecb3d8d3c37d8f8e2535cd70e27fb856683d235255882277984f5be07a037  source.tar.gz
+e4e494caa1a680f9bbae8696e88f0f800d495eac35418e49110c6d6047ffc9ee1295fb1c2b108cf555db15a2ab3759865677220f0be48790b49c0368c6409041  source.tar.gz
 "
