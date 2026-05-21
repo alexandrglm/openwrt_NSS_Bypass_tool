@@ -14,7 +14,7 @@ install="nss-switch.post-install nss-switch.pre-deinstall"
 
 prepare() {
     mkdir -p "$builddir"
-    cp -r "$startdir/source"/* "$builddir/" 2>/dev/null || true
+    cp -r "$srcdir/src/"* "$builddir/"
 }
 
 build() {
