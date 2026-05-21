@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: alpine:latest
     permissions:
       contents: write
     steps:
@@ -18,8 +20,7 @@ jobs:
 
       - name: Setup APK build environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y alpine-sdk abuild
+          apk add --no-cache alpine-sdk abuild
 
       - name: Setup signing keys
         run: |
@@ -53,32 +54,22 @@ jobs:
           name: NSS-Switch v${{ steps.get_version.outputs.VERSION }} (DEBUG)
           body: |
             > **⚠️ WORK IN PROGRESS**
-
             A selective CPU bypass manager for Qualcomm NSS (Network Subsystem) on OpenWrt.
             This tool allows you to mark specific connections so they are processed by the **CPU** instead of the **NSS hardware accelerator**.
-
-
             Useful (and **needed**) for:
-
             - Traffic that needs deep inspection (e.g., `tcpdump`, `bandwidthd`, `snort`)
             - Debugging or troubleshooting NSS offload issues
             - Per-flow bypass rules without disabling NSS globally
-
             **No service/network restart required to bypass (hot-swapping) any NSS connection.**
-
             > 📌 See [`CHANGELOG.md`](https://github.com/alexandrglm/openwrt_NSS_Bypass_tool/blob/main/CHANGELOG.md) for detailed history and pending work.
-
             ## Installation on OpenWrt
-
             ### Pre-requisites
             - [X] OpenWrt 25.12+ with NSS (QCA SSDK) enabled
             - [X] Full `conntrack` / `nftables` support
-
             ### APK file
             ```bash
             apk add /path/to/nss-switch-${{ steps.get_version.outputs.VERSION }}_DEBUG.apk --allow-untrusted
             ```
-
             > RSA public key is included in the repository/releases so it can be added to `/etc/apk/keys/` directly, making the `--allow-untrusted` flag unnecessary.
           files: |
             packages/noarch/nss-switch-*.apk
