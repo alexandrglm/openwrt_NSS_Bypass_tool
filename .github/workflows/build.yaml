@@ -9,31 +9,54 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  compile-c:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Create bin directory in source
-        run: |
-          cd build_C/src_C
-          mkdir -p source/usr/bin/NSS-Switch/bin
 
       - name: Install cross-compiler for aarch64
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      - name: Compile and copy nss-ct-dump aarch64 to source bin path
+      - name: Compile nss-ct-dump for aarch64
         run: |
           cd build_C/src_C/nss-ct-dump
           aarch64-linux-gnu-gcc -Wall -O2 -static -o nss-ct-dump_aarch64 nss-ct-dump.c
           file nss-ct-dump_aarch64
-          cp nss-ct-dump_aarch64 ../source/usr/bin/NSS-Switch/bin/
+
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nss-ct-dump-binary
+          path: build_C/src_C/nss-ct-dump/nss-ct-dump_aarch64
+          retention-days: 1
+
+
+  build-apk:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:latest
+    needs: compile-c
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download compiled binary
+        uses: actions/download-artifact@v4
+        with:
+          name: nss-ct-dump-binary
+          path: build_C/src_C/nss-ct-dump/
+
+      - name: Create bin directory and copy binary
+        run: |
+          cd build_C/src_C
+          mkdir -p source/usr/bin/NSS-Switch/bin
+          cp nss-ct-dump/nss-ct-dump_aarch64 source/usr/bin/NSS-Switch/bin/
+          ls -la source/usr/bin/NSS-Switch/bin/
 
       - name: Setup APK build environment
         run: apk add --no-cache alpine-sdk abuild
