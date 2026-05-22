@@ -4,8 +4,8 @@ on:
   push:
     branches: [ "main", "master" ]
     paths:
-      - 'build_C/src_C/**'
-      - 'build_C/src_C/APKBUILD'
+      - 'build_1.0.1_aarch64/**'
+      - 'build_1.0.1_aarch64/APKBUILD'
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
 
       - name: Compile nss-ct-dump for aarch64
         run: |
-          cd build_C/src_C/nss-ct-dump
+          cd build_1.0.1_aarch64/nss-ct-dump
           aarch64-linux-gnu-gcc -Wall -O2 -static -o nss-ct-dump_aarch64 nss-ct-dump.c
           file nss-ct-dump_aarch64
 
@@ -30,9 +30,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nss-ct-dump-binary
-          path: build_C/src_C/nss-ct-dump/nss-ct-dump_aarch64
+          path: build_1.0.1_aarch64/nss-ct-dump/nss-ct-dump_aarch64
           retention-days: 1
-
 
   build-apk:
     runs-on: ubuntu-latest
@@ -49,11 +48,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: nss-ct-dump-binary
-          path: build_C/src_C/nss-ct-dump/
+          path: build_1.0.1_aarch64/nss-ct-dump/
 
       - name: Create bin directory and copy binary
         run: |
-          cd build_C/src_C
+          cd build_1.0.1_aarch64
           mkdir -p source/usr/bin/NSS-Switch/bin
           cp nss-ct-dump/nss-ct-dump_aarch64 source/usr/bin/NSS-Switch/bin/
           ls -la source/usr/bin/NSS-Switch/bin/
@@ -73,7 +72,7 @@ jobs:
 
       - name: Build APK
         run: |
-          cd build_C/src_C
+          cd build_1.0.1_aarch64
           git config --global --add safe.directory "$(pwd)"
           tar czf source.tar.gz source/
           abuild -F checksum
@@ -82,12 +81,11 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          cd build_C/src_C
+          cd build_1.0.1_aarch64
           VERSION=$(grep "^pkgver=" APKBUILD | cut -d= -f2 | tr -d '"')
           REL=$(grep "^pkgrel=" APKBUILD | cut -d= -f2 | tr -d '"')
           echo "VERSION=${VERSION}-r${REL}" >> $GITHUB_OUTPUT
           echo "PKG_VERSION=${VERSION}" >> $GITHUB_OUTPUT
-
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

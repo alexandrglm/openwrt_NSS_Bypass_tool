@@ -1,6 +1,6 @@
 #!/usr/bin/env ash
-# NSS-Switch post-installation script
-# Runs after APK installs files to /usr/bin/NSS-Switch/
+# NSS-Switch pre-install script
+# THIS IS AN EXACT COPY of nss-switch.pre-install
 
 log() {
     echo "[NSS-Switch] $*" > /dev/kmsg 2>/dev/null || true

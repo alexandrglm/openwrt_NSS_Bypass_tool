@@ -59,6 +59,10 @@ rm -f /usr/bin/nss-switch 2>/dev/null
 rm -f "$FIREWALL_LINK" 2>/dev/null
 log "Symlinks removed"
 
+# 5.1 Remove entire dir
+log "Removing /usr/bin/NSS-Switch directory"
+rm -rf /usr/bin/NSS-Switch 2>/dev/null || true
+
 # 6. Restart firewall to clean up
 if [ -x /etc/init.d/firewall ]; then
     /etc/init.d/firewall restart 2>/dev/null
