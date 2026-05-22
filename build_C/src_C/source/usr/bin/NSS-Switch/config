@@ -1,0 +1,30 @@
+# NSS-Switch global configuration
+# /usr/bin/NSS-Switch/config
+
+# Default persistence mode for new rules: yes | no
+PERSIST_DEFAULT=no
+
+# Our reserved ct mark bit (bit 16, outside QoS 0x000000ff range)
+NSS_MARK=0x00010000
+NSS_MARK_MASK=0x00010000
+
+# ECM debugfs base path
+ECM_DEBUGFS=/sys/kernel/debug/ecm
+
+# Our nftables table and chain names
+NFT_TABLE="inet fw4"
+NFT_CHAIN_PRE="nss_bypass_pre"
+NFT_CHAIN_POST="nss_bypass_post"
+
+# State and rules file
+RULES_FILE=/usr/bin/NSS-Switch/state/rules.conf
+DEBUG_LOG=/usr/bin/NSS-Switch/state/debug.log
+
+# Firewall hook script (auto-generated, loaded by fw4)
+FW_SCRIPT=/usr/bin/NSS-Switch/firewall.d/nss-bypass
+
+# Watch refresh interval in seconds
+WATCH_INTERVAL=3
+
+# Debug mode: yes | no (can also be set via DEBUG=1 env var)
+DEBUG_MODE=no

@@ -1,13 +1,14 @@
 # Maintainer: Alexander Gomez <alexandrglm@proton.me>
 pkgname=nss-switch
 pkgver=1.0.1
-pkgrel=7
+pkgrel=1
 pkgdesc="Qualcomm NSS Bypass tool, Hybrid C"
 url="https://github.com/alexandrglm/openwrt_NSS_Bypass_tool"
 arch="noarch"
 license="GPL"
 options="!check !strip !scanelf !scandeps !archcheck"
 source="source.tar.gz"
+install="nss-switch.pre-install nss-switch.post-install nss-switch.pre-deinstall"
 
 build() {
     cd "$srcdir"
@@ -79,6 +80,3 @@ package() {
     mkdir -p "$pkgdir/usr/bin"
     ln -sf /usr/bin/NSS-Switch/nss-switch.sh "$pkgdir/usr/bin/nss-switch"
 }
-sha512sums="
-3d9e5d948264c3ea9bbd7ce99fac7a3818c2d62b2e3b9278424b511f7ee15813e7e6dfe57733c4018746534d9a183886aa5de9c136f69ffa0e2e78ded19e93cb  source.tar.gz
-"

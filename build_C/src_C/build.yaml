@@ -1,0 +1,124 @@
+name: Build NSS-Switch APK v1.0.1 (Hybrid C)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'build_C/src_C/**'
+      - 'build_C/src_C/APKBUILD'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create bin directory in source
+        run: |
+          cd build_C/src_C
+          mkdir -p source/usr/bin/NSS-Switch/bin
+
+      - name: Install cross-compiler for aarch64
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Compile and copy nss-ct-dump aarch64 to source bin path
+        run: |
+          cd build_C/src_C/nss-ct-dump
+          aarch64-linux-gnu-gcc -Wall -O2 -static -o nss-ct-dump_aarch64 nss-ct-dump.c
+          file nss-ct-dump_aarch64
+          cp nss-ct-dump_aarch64 ../source/usr/bin/NSS-Switch/bin/
+
+      - name: Setup APK build environment
+        run: apk add --no-cache alpine-sdk abuild
+
+      - name: Setup signing keys
+        run: |
+          mkdir -p ~/.abuild
+          echo "${{ secrets.RSA_PRIVATE_KEY }}" > ~/.abuild/nss-switch.rsa
+          echo "${{ secrets.RSA_PUBLIC_KEY }}" > ~/.abuild/nss-switch.rsa.pub
+          cp ~/.abuild/nss-switch.rsa.pub /etc/apk/keys/
+          chmod 600 ~/.abuild/nss-switch.rsa
+          chmod 644 ~/.abuild/nss-switch.rsa.pub
+          printf 'PACKAGER_PRIVKEY=%s/.abuild/nss-switch.rsa\nPACKAGER="Alexander Gomez <alexandrglm@proton.me>"\n' "$HOME" > ~/.abuild/abuild.conf
+
+      - name: Build APK
+        run: |
+          cd build_C/src_C
+          git config --global --add safe.directory "$(pwd)"
+          tar czf source.tar.gz source/
+          abuild -F checksum
+          abuild -F -r
+
+      - name: Get version
+        id: get_version
+        run: |
+          cd build_C/src_C
+          VERSION=$(grep "^pkgver=" APKBUILD | cut -d= -f2 | tr -d '"')
+          REL=$(grep "^pkgrel=" APKBUILD | cut -d= -f2 | tr -d '"')
+          echo "VERSION=${VERSION}-r${REL}" >> $GITHUB_OUTPUT
+          echo "PKG_VERSION=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Find and rename APK
+        run: |
+          APK_PATH=$(find ~/packages -name "*.apk" 2>/dev/null | head -1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find /github/home/packages -name "*.apk" 2>/dev/null | head -1)
+          fi
+          if [ -z "$APK_PATH" ]; then
+            find . -name "*.apk" 2>/dev/null
+            echo "ERROR: No APK found"
+            exit 1
+          fi
+
+          NEW_NAME="nss-switch-${{ steps.get_version.outputs.PKG_VERSION }}-aarch64.apk"
+          cp "$APK_PATH" "$NEW_NAME"
+          echo "APK_NAME=$NEW_NAME" >> $GITHUB_OUTPUT
+          echo "APK_PATH=$NEW_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.VERSION }}-aarch64
+          name: NSS-Switch v${{ steps.get_version.outputs.VERSION }} (aarch64)
+          body: |
+            ## NSS-Switch v1.0.1
+
+            Compiled version for `aarch64` architecture (`ipq807x`).
+
+            ### CHANGELOG
+            - Hybrid support: shell for UI, C for heavy-duty functions
+                * Migrated `conntrack.sh` > `ct_dump_all_full()` to C (highly improved performance)
+
+            > 📌 See [`CHANGELOG.md`](https://github.com/alexandrglm/openwrt_NSS_Bypass_tool/blob/main/CHANGELOG.md) for detailed history.
+
+            ## Installation on OpenWrt
+            ### Pre-requisites
+            - OpenWrt 25.12+ with NSS (QCA SSDK) enabled
+            - Full `conntrack` / `nftables` support
+
+            ### APK file
+            ```bash
+            apk add nss-switch-${{ steps.get_version.outputs.PKG_VERSION }}-aarch64.apk --allow-untrusted
+            ```
+
+            > RSA public key is included in the repository/releases so it can be added to `/etc/apk/keys/` directly, making the `--allow-untrusted` flag unnecessary.
+
+          files: |
+            ${{ steps.get_version.outputs.APK_NAME }}
+            ~/.abuild/nss-switch.rsa.pub
+          prerelease: true
+          draft: false
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nss-switch-aarch64
+          path: ${{ steps.get_version.outputs.APK_NAME }}
+          if-no-files-found: error
