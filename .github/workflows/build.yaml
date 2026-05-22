@@ -88,22 +88,6 @@ jobs:
           echo "VERSION=${VERSION}-r${REL}" >> $GITHUB_OUTPUT
           echo "PKG_VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Find and rename APK
-        run: |
-          APK_PATH=$(find ~/packages -name "*.apk" 2>/dev/null | head -1)
-          if [ -z "$APK_PATH" ]; then
-            APK_PATH=$(find /github/home/packages -name "*.apk" 2>/dev/null | head -1)
-          fi
-          if [ -z "$APK_PATH" ]; then
-            find . -name "*.apk" 2>/dev/null
-            echo "ERROR: No APK found"
-            exit 1
-          fi
-
-          NEW_NAME="nss-switch-${{ steps.get_version.outputs.PKG_VERSION }}-aarch64.apk"
-          cp "$APK_PATH" "$NEW_NAME"
-          echo "APK_NAME=$NEW_NAME" >> $GITHUB_OUTPUT
-          echo "APK_PATH=$NEW_NAME" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -134,7 +118,7 @@ jobs:
             > RSA public key is included in the repository/releases so it can be added to `/etc/apk/keys/` directly, making the `--allow-untrusted` flag unnecessary.
 
           files: |
-            ${{ steps.get_version.outputs.APK_NAME }}
+            /github/home/packages/**/*.apk
             ~/.abuild/nss-switch.rsa.pub
           prerelease: true
           draft: false
@@ -142,6 +126,6 @@ jobs:
       - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nss-switch-aarch64
-          path: build_C/src_C/*.apk
+          name: nss-switch-apk
+          path: /github/home/packages/**/*.apk
           if-no-files-found: error
