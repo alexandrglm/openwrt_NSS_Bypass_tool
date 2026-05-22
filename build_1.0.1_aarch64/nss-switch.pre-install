@@ -1,12 +1,26 @@
 #!/bin/ash
 # 1.0.1-r1 pre-install
 
+# IS_NSS_PLATFORM=0
+
 log() {
     echo "[NSS-Switch] $*" > /dev/kmsg 2>/dev/null || true
     echo "[NSS-Switch] $*" >&2
 }
 
-log "Checking dependencies..."
+
+check_nss_platform() {
+    if lsmod 2>/dev/null | grep -q "qca_nss_drv"; then
+        # IS_NSS_PLATFORM=1
+    else
+        # IS_NSS_PLATFORM=0
+        log "⚠️  NSS hardware NOT detected"
+        log "   This is normal on non-Qualcomm devices or when NSS is disabled in firmware"
+        log "   The tool will still work, but in SFE mode (Software Offload)"
+    fi
+}
+
+check_nss_platform
 
 install_pkg_dependencies() {
     local pkg="$1"
@@ -19,6 +33,8 @@ install_pkg_dependencies() {
     fi
     return 0
 }
+
+log "Checking dependencies..."
 
 # Verificar si conntrackd está instalado
 if ! command -v conntrackd >/dev/null 2>&1; then
