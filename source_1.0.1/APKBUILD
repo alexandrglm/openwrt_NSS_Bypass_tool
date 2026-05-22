@@ -1,0 +1,82 @@
+# Maintainer: Alexander Gomez <alexandrglm@proton.me>
+pkgname=nss-switch
+pkgver=1.0.1
+pkgrel=1
+pkgdesc="Qualcomm NSS Bypass tool, Hybrid C"
+url="https://github.com/alexandrglm/openwrt_NSS_Bypass_tool"
+arch="noarch"
+license="GPL"
+options="!check !strip !scanelf !scandeps !archcheck"
+source="source.tar.gz"
+install="nss-switch.pre-install nss-switch.post-install nss-switch.pre-deinstall"
+
+build() {
+    cd "$srcdir"
+
+    echo "Contenido de $srcdir:"
+    ls -la
+
+    echo "Contenido de source/ (si existe):"
+    ls -la source/ 2>/dev/null || echo "No existe source/"
+
+    # Ahora buscar en source/ (con 'e')
+    if [ -f source/usr/bin/NSS-Switch/bin/nss-ct-dump_aarch64 ]; then
+        echo "✅ Binario aarch64 encontrado"
+        ln -sf source/usr/bin/NSS-Switch/bin/nss-ct-dump_aarch64 source/usr/bin/NSS-Switch/bin/nss-ct-dump
+    else
+        echo "ERROR: No se encontró binario"
+        ls -la source/usr/bin/NSS-Switch/bin/ 2>/dev/null || echo "No existe el directorio"
+        return 1
+    fi
+}
+
+package() {
+    cd "$srcdir"
+
+    mkdir -p "$pkgdir/usr/bin/NSS-Switch/bin"
+    mkdir -p "$pkgdir/usr/bin/NSS-Switch/lib"
+    mkdir -p "$pkgdir/usr/bin/NSS-Switch/state"
+    mkdir -p "$pkgdir/usr/bin/NSS-Switch/firewall.d"
+    mkdir -p "$pkgdir/usr/bin/NSS-Switch/lifecycle"
+
+    # Script principal
+    install -Dm755 source/usr/bin/NSS-Switch/nss-switch.sh "$pkgdir/usr/bin/NSS-Switch/nss-switch.sh"
+
+    # Binario y symlink
+    install -Dm755 source/usr/bin/NSS-Switch/bin/nss-ct-dump_aarch64 "$pkgdir/usr/bin/NSS-Switch/bin/nss-ct-dump_aarch64"
+    ln -sf nss-ct-dump_aarch64 "$pkgdir/usr/bin/NSS-Switch/bin/nss-ct-dump"
+
+    # Config
+    [ -f source/usr/bin/NSS-Switch/config ] && install -Dm644 source/usr/bin/NSS-Switch/config "$pkgdir/usr/bin/NSS-Switch/config"
+
+    # Librerías
+    for lib in chandler ui ecm conntrack nft detect rules debug; do
+        [ -f "source/usr/bin/NSS-Switch/lib/${lib}.sh" ] && \
+            install -Dm755 "source/usr/bin/NSS-Switch/lib/${lib}.sh" "$pkgdir/usr/bin/NSS-Switch/lib/${lib}.sh"
+    done
+
+    # Firewall
+    [ -f "source/usr/bin/NSS-Switch/firewall.d/nss-bypass" ] && \
+        install -Dm755 "source/usr/bin/NSS-Switch/firewall.d/nss-bypass" "$pkgdir/usr/bin/NSS-Switch/firewall.d/nss-bypass"
+
+    # Rules
+    if [ -f "source/usr/bin/NSS-Switch/state/rules.conf" ]; then
+        install -Dm644 "source/usr/bin/NSS-Switch/state/rules.conf" "$pkgdir/usr/bin/NSS-Switch/state/rules.conf"
+    else
+        echo "# NSS-Switch rules — id|proto|src_ip|dst_ip|src_port|dst_port|iface|persist|comment" > "$pkgdir/usr/bin/NSS-Switch/state/rules.conf"
+    fi
+
+    # Lifecycle scripts
+    [ -f "source/usr/bin/NSS-Switch/lifecycle/nss-switch_preinst.source" ] && \
+        install -Dm755 "source/usr/bin/NSS-Switch/lifecycle/nss-switch_preinst.source" "$pkgdir/usr/bin/NSS-Switch/lifecycle/nss-switch_preinst.source"
+
+    [ -f "source/usr/bin/NSS-Switch/lifecycle/nss-switch_postinst.source" ] && \
+        install -Dm755 "source/usr/bin/NSS-Switch/lifecycle/nss-switch_postinst.source" "$pkgdir/usr/bin/NSS-Switch/lifecycle/nss-switch_postinst.source"
+
+    [ -f "source/usr/bin/NSS-Switch/lifecycle/nss-switch_prerm.source" ] && \
+        install -Dm755 "source/usr/bin/NSS-Switch/lifecycle/nss-switch_prerm.source" "$pkgdir/usr/bin/NSS-Switch/lifecycle/nss-switch_prerm.source"
+
+    # Symlink global
+    mkdir -p "$pkgdir/usr/bin"
+    ln -sf /usr/bin/NSS-Switch/nss-switch.sh "$pkgdir/usr/bin/nss-switch"
+}

@@ -1,45 +1,14 @@
-# Project Status, Roadmap & Changelog
+#  Changelog
 
-## 1. Pending
+### 22 May 2026: Release v1.0.1 (aarch64)
 
-### Architecture
-- [ ] **Migrate most expensive functions to C** 
-    - Change arch scope from noarch to most used aarch on QCA NSS platforms
-      - 1. aarch64
-      - 2 ?
+- **Architecture:** native aarch64 support for Qualcomm IPQ807x / NSS platform
+- **Performance:** `ct_dump_all_full()` fully migrated from shell to C
+  - **Speed improvement: ~30s ->  <100ms for 1000+ connections**
+- **Hybrid design:** UI remains in shell , heavy parsing in C (fast)
+- **APK:** aarch64-only, includes both shell scripts and compiled binary, ccompiled with GitHub Actions for transparency
 
-###  Engine
 
-- [ ] **Optimise Interface/Device Detection:** Refine and improve the detection of interfaces and network devices for absolute interface (`iface`) routing rules.
-    - **New Interfaces detection**: Implement an interface watchdog mechanism triggered on each execution cycle, or introduce an explicit command-line flag (`cmd`) to allow requesting a manual interface watch.
-
-- [ ] **Expand NSS Protocol Compatibility:** Integrate compatibility with alternative connection types and protocols managed by the Qualcomm Network Subsystem (NSS), such as **WireGuard**.
-
-- [ ] **Enhance IPv6 Handling:** Improve the management, allocation, and tracking of IPv6 addresses, explicitly targeting Unique Local Addresses (ULA) and Global Unicast Addresses (GUA).
-
-- [IN PROGRESS] **Enhance PPPoE / WAN Interface Handling:** Currently, hot-swapping bypasses is not possible, and furthermore, interface detection within the `pick` command fails to apply a correct per-interface rule to `pppoe-wan` (it does not accurately differentiate between `lo` and `pppoe-wan`).
-
-- [ ] **Test NSS Acceleration Behaviour on Wi-Fi Mesh:** Investigate exactly how the NSS accelerates Wi-Fi Mesh systems (whether it operates in the same manner as local connection acceleration, either targets a specific interface or device IP... or employs a different mechanism).
-
-### Compatibility
-
-- [ ] **Refactor `check_root()` for a better validation:**
-  - Expand the function to perform exhaustive environment checks, verifying system properties including **Board**, **SoC architecture**, **NSS Variant**, `conntrack` status, `nftables` availability, and root privileges.
-  - Structure this validation to gracefully permit and support alternative NSS-enabled SoC's ( **IPQ5018**, which incorporates a very-limited NSS which also uses the ECM, but operates differently from the **ipq607x / ipq807x** platform).
-
-  
-  
-### UI (User Interface)
-- [ ] **Optimise Table Rendering in `watch` / `pick`:** Improve the layout and data sampling/display for tables within the `watch` and `pick` command environments.
-
-- [ ] **Implement Terminal Resolution Warnings:** Add a better  mechanism to check and notice the shell resolution; it should halt execution and alert the user if the terminal width falls below `125c` (the optimal width is exactly `125c`).
-    - [ ] **Create a Dynamic Layout Toggle for `_render_watch()`:** Implement a conditional switch during execution (when the terminal width is exactly `125c`, use fixed/exact columns; when it exceeds `125c`, automatically expand all values to fill the screen).
-  
-- [ ] **Introduce User Preferences for Shell Compatibility:** Implement user settings to toggle colours, visual styles, and resolution targets in order to improve compatibility across diverse shell environments.
-
----
-
-## 2. Changelog
 
 ### 21 May 2026
 * **feat(ui):**
