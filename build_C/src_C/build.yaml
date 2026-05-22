@@ -143,5 +143,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nss-switch-aarch64
-          path: ${{ steps.get_version.outputs.APK_NAME }}
+          path: build_C/src_C/*.apk
           if-no-files-found: error
