@@ -2,6 +2,12 @@
 
 ## 1. Pending
 
+### Architecture
+- [ ] **Migrate most expensive functions to C** 
+    - Change arch scope from noarch to most used aarch on QCA NSS platforms
+      - 1. aarch64
+      - 2 ?
+
 ###  Engine
 
 - [ ] **Optimise Interface/Device Detection:** Refine and improve the detection of interfaces and network devices for absolute interface (`iface`) routing rules.

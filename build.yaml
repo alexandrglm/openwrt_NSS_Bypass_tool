@@ -18,6 +18,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: DEBUG
+        run: |
+          echo "PWD=$(pwd)"
+          ls -lah
+          ls -lah source.tar.gz || true
+          cat APKBUILD
+          tar -tzf source.tar.gz | head -40 || true
+
       - name: Setup APK build environment
         run: apk add --no-cache alpine-sdk abuild
 
