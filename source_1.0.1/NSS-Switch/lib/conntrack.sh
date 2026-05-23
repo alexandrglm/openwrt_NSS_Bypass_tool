@@ -7,8 +7,6 @@
 
 CONNTRACK_FILE=/proc/net/nf_conntrack
 
-
-
 # ─── Check conntrack available ────────────────────────────────────────────────
 ct_check() {
     [ -f "$CONNTRACK_FILE" ] || { ui_error "conntrack not available"; return 1; }
@@ -251,59 +249,6 @@ ct_nss_status() {
     fi
 }
 
-# ─── Dump all connections as structured records ───────────────────────────────
-# Output format: NUM|PROTO|SRC:SPORT|DST:DPORT|IFACE|NSS|BYPASS|MARK|STATE
-# Filters out router-local connections (local:*) — use ct_dump_all_full for those
-# DEBUG Deprecated, replaced by ct_dump_all_full
-# ct_dump_all() {
-#     ct_check || return 1
-#     local ifmap
-#     ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
-#     _ct_build_iface_map "$ifmap"
-#     local num=0
-#     while IFS= read -r line; do
-#         ct_parse_line "$line"
-#         [ -z "$CT_SRC" ] && continue
-#         local iface found=""
-#         while IFS=' ' read -r ip cidr if2; do
-#             if [ "$CT_SRC" = "$ip" ]; then
-#                 found="local:$if2"
-#                 break
-#             fi
-#             if _ct_ip_in_cidr "$CT_SRC" "$cidr" 2>/dev/null; then
-#                 found="$if2"
-#             fi
-#         done < "$ifmap"
-#         [ -z "$found" ] && found="?"
-#         iface="$found"
-#         case "$iface" in local:*) continue ;; esac
-#         [ "$iface" = "?" ] && continue
-#         num=$((num+1))
-#         local nss_status bypassed
-#         nss_status=$(ct_nss_status "$CT_MARK")
-#         bypassed="NO"
-#         ct_is_bypassed "$CT_MARK" && bypassed="YES"
-#         # Comprimir IPv6 si aplica
-#         local display_src display_dst
-#         if echo "$CT_SRC" | grep -q ":"; then
-#             display_src=$(_ipv6_compress "$CT_SRC")
-#         else
-#             display_src="$CT_SRC"
-#         fi
-#         if echo "$CT_DST" | grep -q ":"; then
-#             display_dst=$(_ipv6_compress "$CT_DST")
-#         else
-#             display_dst="$CT_DST"
-#         fi
-#         printf "%d|%s|%s#%s|%s#%s|%s|%s|%s|%s|%s\n" \
-#             "$num" "$CT_PROTO" \
-#             "$display_src" "$CT_SPORT" \
-#             "$display_dst" "$CT_DPORT" \
-#             "$iface" "$nss_status" "$bypassed" \
-#             "$CT_MARK" "$CT_STATE"
-#     done < "$CONNTRACK_FILE"
-#     rm -f "$ifmap"
-# }
 
 # ─── Dump ALL connections including router-local ──────────────────────────────
 # Output format: NUM|PROTO|SRC:SPORT|DST:DPORT|IFACE|NSS|BYPASS|MARK|STATE
@@ -311,7 +256,7 @@ ct_nss_status() {
 ct_dump_all_full() {
 
     if [ "$HAS_CT_DUMP" = "yes" ]; then
-        "$BIN_DIR/nss-ct-dump_aarch64"
+        "$BIN_DIR/nss-ct-dump"
     else
         _ct_dump_all_full_shell
     fi
@@ -319,15 +264,7 @@ ct_dump_all_full() {
 _ct_dump_all_full_shell() {
 
     ct_check || return 1
-# DEBUG Cambio para extraer la iface, nada de iterar y crear mapa, directamente de ip route y a correr
-#     local ifmap
-#     ifmap=$(mktemp /tmp/nss-ifmap.XXXXXX)
 
-    # DEBUG trap particular, pasado a trap global en 3 condiciones, este block NO interfiere con cambio iface map
-    # trap "rm -f '$ifmap'; trap - INT TERM EXIT; exit" INT TERM EXIT
-
-
-#     _ct_build_iface_map "$ifmap"
     local num=0
     while IFS= read -r line; do
         ct_parse_line "$line"
@@ -338,18 +275,6 @@ _ct_dump_all_full_shell() {
         [ -z "$iface" ] && iface="?"
         # Normalizar nombre de interfaz para mostrar
         iface=$(_normalize_iface_display "$iface")
-#         local iface found=""
-#         while IFS=' ' read -r ip cidr if2; do
-#             if [ "$CT_SRC" = "$ip" ]; then
-#                 found="local:$if2"
-#                 break
-#             fi
-#             if _ct_ip_in_cidr "$CT_SRC" "$cidr" 2>/dev/null; then
-#                 found="$if2"
-#             fi
-#         done < "$ifmap"
-#         [ -z "$found" ] && found="?"
-#         iface="$found"
         num=$((num+1))
         local nss_status bypassed
         nss_status=$(ct_nss_status "$CT_MARK")
@@ -378,12 +303,6 @@ _ct_dump_all_full_shell() {
             "$CT_MARK" "$CT_STATE"
     done < "$CONNTRACK_FILE"
 
-# DEBUG Cambio para extraer la iface, nada de iterar y crear mapa, directamente de ip route y a correr
-#     rm -f "$ifmap"
-
-
-    # DEBUG trap particular
-    # trap - INT TERM EXIT
 }
 
 # ─── Get single connection by NUM ─────────────────────────────────────────────

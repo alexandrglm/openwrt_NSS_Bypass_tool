@@ -78,46 +78,6 @@ else
     FG_ORANGE=''
 fi
 
-
-# ui_calc_column_widths() {
-#     ui_get_term_size 2>/dev/null || true
-#     local available=$(( TERM_COLS - UI_FIXED_WIDTH ))
-#
-#     # Give BOTH columns the same minimum width to avoid truncation
-#     # If terminal is too narrow, we'll show a warning but at least try
-#     local needed=$(( UI_MIN_SRC_WIDTH + UI_MIN_DST_WIDTH ))
-#
-#     if [ $available -ge $needed ]; then
-#         # Enough space - give both columns their minimum
-#         UI_SRC_WIDTH=$UI_MIN_SRC_WIDTH
-#         UI_DST_WIDTH=$UI_MIN_DST_WIDTH
-#         # Distribute any extra space evenly
-#         local extra=$(( available - needed ))
-#         UI_SRC_WIDTH=$(( UI_SRC_WIDTH + extra/2 ))
-#         UI_DST_WIDTH=$(( UI_DST_WIDTH + extra - extra/2 ))
-#     else
-#         # Terminal too narrow - give equal share of available space
-#         local share=$(( available / 2 ))
-#         UI_SRC_WIDTH=$share
-#         UI_DST_WIDTH=$share
-#         # Ensure at least 25 chars each (enough for basic IPv4)
-#         [ $UI_SRC_WIDTH -lt 25 ] && UI_SRC_WIDTH=25
-#         [ $UI_DST_WIDTH -lt 25 ] && UI_DST_WIDTH=25
-#     fi
-#
-#     # Final safety: never exceed terminal width
-#     local total=$(( UI_FIXED_WIDTH + UI_SRC_WIDTH + UI_DST_WIDTH ))
-#     if [ $total -gt $TERM_COLS ] && [ $TERM_COLS -ge 80 ]; then
-#         local overflow=$(( total - TERM_COLS ))
-#         # Reduce both columns equally
-#         UI_DST_WIDTH=$(( UI_DST_WIDTH - overflow/2 ))
-#         UI_SRC_WIDTH=$(( UI_SRC_WIDTH - (overflow - overflow/2) ))
-#         [ $UI_SRC_WIDTH -lt 20 ] && UI_SRC_WIDTH=20
-#         [ $UI_DST_WIDTH -lt 20 ] && UI_DST_WIDTH=20
-#     fi
-# }
-
-
 # ─── Box-drawing chars ────────────────────────────────────────────────────────
 BOX_TL='╔' BOX_TR='╗' BOX_BL='╚' BOX_BR='╝'
 BOX_H='═'  BOX_V='║'
@@ -424,7 +384,6 @@ _proto_to_service() {
         27019) echo "MONGO" ;;
         51820) echo "WG" ;;
         *)
-            # Si no hay traducción, mostrar proto original
             echo "$proto"
             ;;
     esac

@@ -3,7 +3,7 @@
 # Format: id|proto|src_ip|dst_ip|src_port|dst_port|iface|persist|comment
 # ASH compatible, BusyBox v1.37+
 
-RULES_HEADER="# NSS-Switch rules — id|proto|src_ip|dst_ip|src_port|dst_port|iface|persist|comment"
+RULES_HEADER="# NSS-Switch rules: id|proto|src_ip|dst_ip|src_port|dst_port|iface|persist|comment"
 
 # ─── Ensure rules file exists ─────────────────────────────────────────────────
 rules_init() {
