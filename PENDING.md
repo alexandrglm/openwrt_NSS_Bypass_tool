@@ -1,4 +1,4 @@
-## 1. Pending
+## 1. Pending for v.1.0.1
 
 ### Architecture
 

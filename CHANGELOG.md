@@ -1,6 +1,6 @@
 #  Changelog
 
-### 22 May 2026: Release v1.0.1 (aarch64)
+### 22 May 2026: Release v1.0.0 (aarch64, C compiled components)
 
 - **Architecture:** native aarch64 support for Qualcomm IPQ807x / NSS platform
 - **Performance:** `ct_dump_all_full()` fully migrated from shell to C
