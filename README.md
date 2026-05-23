@@ -1,9 +1,7 @@
-# NSS-Switch - NSS Bypass
-
-> **⚠️ WORK IN PROGRESS**
+# NSS-Switch - QualcommAX NSS Bypass Tool
 
 A selective CPU bypass manager for Qualcomm NSS (Network Subsystem) on OpenWrt.  
-This tool allows you to mark specific connections so they are processed by the **CPU** instead of the **NSS hardware accelerator**.
+This tool allows you to mark specific connections so they are processed by the **CPU** instead of the **NSS hardware accelerator**. Also compatible with any platform using SFE Software Offload.
 
 ![](./DOCS/img/watch.png)
 
@@ -15,7 +13,7 @@ Useful (and **needed**) for:
 
 **No service/network restart required to bypass (hot-swapping) any NSS connection.**
 
-> 📌 See [`CHANGELOG.md`](./CHANGELOG.md) for detailed history and pending work.
+> 📌 Check [`CHANGELOG.md`](./CHANGELOG.md) for detailed history / [`PENDING.md`](./PENDING.md) for pending work.
 
 ---
 
@@ -24,7 +22,6 @@ Useful (and **needed**) for:
 ```bash
 # Bypass all traffic from a specific device
 nss-switch add --src-ip 192.168.1.50 --comment "PC off NSS"
-
 
 # Bypass SSH traffic (temporary)
 nss-switch add --proto tcp --dst-port 22 --temp
@@ -82,14 +79,24 @@ nss-switch watch 5
 - [X] - OpenWRT +25.12 with NSS (QCA SSDK) enabled
 - [X] - Full `conntrack` / `iptables-nft` support.
 
+## Releases
+* [**`v.1.0` for `aarch64` devices**](https://github.com/alexandrglm/openwrt_NSS_Bypass_tool/releases/tag/v1.0.0-r1-aarch64)
+    * Intended for `ipq807x` devices with NSS hardware offloading capabilities. Shell / C hybrid for performance optimisation.
+
+* [**`beta-staging` version for any platform (`noarch`)**](https://github.com/alexandrglm/openwrt_NSS_Bypass_tool/releases/tag/v1.0.0-r1-DEBUG)
+    * Targeted for **any** device equipped with NSS, as well as **any** device using Software Flow Offloading (SFE). Bad performance (10x slower than C compiled components version). Suitable for tests or debug. 
+ 
+
 ## APK file
 ```bash
-apk add /path/to/nss-switch-1.0.0-r1_DEBUG.apk --allow-untrusted
+nss-switch-1.0.0-r1-aarch64-selfsigned.apk --allow-untrusted
 ```
->  RSA public key is included in the repository/releases so they can be added to `/etc/apk/keys/` directly, making the `--allow-untrusted` flag unnecessary
+
+> RSA `nss-switch.rsa.pub`public key is included in the repository/releases so it can be added to `/etc/apk/keys/` directly, making the `--allow-untrusted` flag unnecessary.
 
 
-## Using `install.sh` script
+## Manual Installation (noarch, beta/staging release)
+- Using `install.sh` script
 
 ```bash
 # Put the install.sh into your /tmp/ and run the installer
@@ -105,59 +112,6 @@ The installer:
 - Installs default configuration
 
 ---
-
-## Manual Installation
-
-```bash
-# 1. Define installation paths
-INSTALL_DIR="/usr/bin/NSS-Switch"
-FIREWALL_LINK="/etc/firewall.d/nss-bypass"
-FW_CONF="/etc/config/firewall"
-RULES_FILE="$INSTALL_DIR/state/rules.conf"
-
-# 2. Create required directories
-mkdir -p "$INSTALL_DIR/lib"
-mkdir -p "$INSTALL_DIR/state"
-mkdir -p "$INSTALL_DIR/firewall.d"
-
-# 3. Copy all files to their destinations
-cp nss-switch.sh "$INSTALL_DIR/"
-cp config "$INSTALL_DIR/"
-cp lib/ui.sh "$INSTALL_DIR/lib/"
-cp lib/ecm.sh "$INSTALL_DIR/lib/"
-cp lib/conntrack.sh "$INSTALL_DIR/lib/"
-cp lib/nft.sh "$INSTALL_DIR/lib/"
-cp lib/detect.sh "$INSTALL_DIR/lib/"
-cp lib/rules.sh "$INSTALL_DIR/lib/"
-cp lib/debug.sh "$INSTALL_DIR/lib/"
-cp firewall.d/nss-bypass "$INSTALL_DIR/firewall.d/"
-
-# 4. Set permissions
-chmod 755 "$INSTALL_DIR/nss-switch.sh"
-chmod 644 "$INSTALL_DIR/config"
-chmod 755 "$INSTALL_DIR/lib/"*.sh
-chmod 755 "$INSTALL_DIR/firewall.d/nss-bypass"
-touch "$RULES_FILE"
-chmod 644 "$RULES_FILE"
-
-# 5. Create symlink in PATH
-ln -s "$INSTALL_DIR/nss-switch.sh" /usr/bin/nss-switch
-chmod 755 /usr/bin/nss-switch
-
-# 6. Create firewall symlink
-ln -s "$INSTALL_DIR/firewall.d/nss-bypass" "$FIREWALL_LINK"
-
-# 7. Add UCI include to firewall config (idempotent)
-if ! grep -q "nss_bypass_include" "$FW_CONF" 2>/dev/null; then
-    printf '\nconfig include 'nss_bypass_include'\n\toption type 'script'\n\toption path '/etc/firewall.d/nss-bypass'\n' >> "$FW_CONF"
-fi
-
-# 8. Once installed, apply any pre-existant rule (if you are updating)
-nss-switch apply
-```
----
-
-
 
 ## How it works
 
@@ -198,10 +152,10 @@ Mark 0x00010000 to desired packet -> Makes an ECM defunct -> So, CPU handles thi
 | Other NSS SoCs (`ipq607x`, `ipq501x`) | ❌ Not tested , no hardware available for development |
 | ECM frontend detection | ✅ Works with Hardware Offloading (NSS), also Software Offloading (SFE) |
 | `nftables` + `conntrack` integration | ✅ Fully working |
-| Interactive shell UI (`watch`, `pick`) | ✅ Working with native terminal components |
+| Interactive shell UI (`watch`, `pick`) | ✅ Working with native shell & C compiled components |
 | Persistent rules | ✅ Survive reboots via `rules.conf` and `fw4` includes |
 
-> 📌 See [`CHANGELOG.md`](./CHANGELOG.md) for detailed history and pending work.
+> 📌 Check [`CHANGELOG.md`](./CHANGELOG.md) for detailed history / [`PENDING.md`](./PENDING.md) for pending work.
 
 
 ---
@@ -209,11 +163,11 @@ Mark 0x00010000 to desired packet -> Makes an ECM defunct -> So, CPU handles thi
 
 # 🤝 Contributing & PR to OpenWrt
 
-This tool is not yet ready for an official OpenWrt package.
-
-## Reason
-
-NSS-Switch is only useful for users running a non-official OpenWrt fork with NSS support (typically developed maintained by @AgustinLorenzo, [here](https://github.com/AgustinLorenzo/openwrt)). Mainline OpenWrt does not include NSS drivers.
+~~This tool is not yet ready for an official OpenWrt package.~~
+~~## Reason~~
+~~NSS-Switch is only useful for users running a non-official OpenWrt fork with NSS support (typically developed maintained by @AgustinLorenzo, [here](https://github.com/AgustinLorenzo/openwrt)). Mainline OpenWrt does not include NSS drivers.~~
+- [2025-05-23]
+Submitted for review and inclusion into official OpenWrt repositories, as it is compatible with any platform with SFE (Software Flow Offloading) in use and/or QualcommAX platforms with NSS.
 
 ## If you want to help
 
@@ -223,9 +177,9 @@ NSS-Switch is only useful for users running a non-official OpenWrt fork with NSS
 
 ---
 
-# 📄 License
+# License
 
-GPL-2.0
+GPL-2.0-or-newer
 
 ---
 
