@@ -29,8 +29,7 @@ char* get_iface_for_ip(const char *ip);
 int is_bypassed(unsigned int mark);
 const char* get_nss_state(unsigned int mark);
 unsigned int parse_mark(const char *line);
-void parse_conntrack_line(const char *line, char *proto, char *src_ip, unsigned int *src_port,
-                          char *dst_ip, unsigned int *dst_port, unsigned int *mark, char *state);
+void parse_conntrack_line(const char *line, char *proto, char *src_ip, unsigned int *src_port, char *dst_ip, unsigned int *dst_port, unsigned int *mark, char *state);
 int is_router_local(const char *ip);
 
 
@@ -113,7 +112,7 @@ char* get_iface_for_ip(const char *ip) {
     /* Si es IPv6, formato especial */
     if (strchr(ip, ':') != NULL) {
         snprintf(cmd, sizeof(cmd), "ip -6 route get %s 2>/dev/null | grep -oE 'dev [^ ]+' | cut -d' ' -f2", ip);
-    /* Y si no, es IPv4 */
+        /* Y si no, es IPv4 */
     } else {
         snprintf(cmd, sizeof(cmd), "ip route get %s 2>/dev/null | grep -oE 'dev [^ ]+' | cut -d' ' -f2", ip);
     }
@@ -327,9 +326,7 @@ int main(int argc, char *argv[]) {
         else if (strcmp(proto, "1") == 0) strcpy(proto, "icmp");
 
         /* Output con el m ismo formato pipes que shell */
-        printf("%d|%s|%s|%s|%s|%s|%s|%u|%s\n",
-                num, proto, src_display, dst_display, iface,
-                nss_state, bypass, mark, state);
+        printf("%d|%s|%s|%s|%s|%s|%s|%u|%s\n", num, proto, src_display, dst_display, iface, nss_state, bypass, mark, state);
     }
 
     fclose(fp);
