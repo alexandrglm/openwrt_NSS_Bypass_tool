@@ -1,3 +1,0 @@
-#!/bin/ash
-# 1.0.0-r1 post-install
-/usr/bin/NSS-Switch/lifecycle/nss-switch_postinst.source

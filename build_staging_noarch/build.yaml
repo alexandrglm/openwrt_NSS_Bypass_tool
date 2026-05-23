@@ -1,0 +1,91 @@
+name: Build NSS-Switch APK
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'build_staging_noarch/src/**'
+      - 'build_staging_noarch/APKBUILD'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: DEBUG
+        run: |
+          echo "PWD=$(pwd)"
+          ls -lah
+          ls -lah source.tar.gz || true
+          cat APKBUILD
+          tar -tzf source.tar.gz | head -40 || true
+
+      - name: Setup APK build environment
+        run: apk add --no-cache alpine-sdk abuild
+
+      - name: Setup signing keys
+        run: |
+          mkdir -p ~/.abuild
+          echo "${{ secrets.RSA_PRIVATE_KEY }}" > ~/.abuild/nss-switch.rsa
+          echo "${{ secrets.RSA_PUBLIC_KEY }}" > ~/.abuild/nss-switch.rsa.pub
+          cp ~/.abuild/nss-switch.rsa.pub /etc/apk/keys/
+          chmod 600 ~/.abuild/nss-switch.rsa
+          chmod 644 ~/.abuild/nss-switch.rsa.pub
+          printf 'PACKAGER_PRIVKEY=%s/.abuild/nss-switch.rsa\nPACKAGER="Alexander Gomez <alexandrglm@proton.me>"\n' "$HOME" > ~/.abuild/abuild.conf
+
+      - name: Build APK
+        run: |
+          git config --global --add safe.directory "$(pwd)"
+          abuild -F checksum
+          abuild -F -r
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(grep "^pkgver=" APKBUILD | cut -d= -f2 | tr -d '"')
+          REL=$(grep "^pkgrel=" APKBUILD | cut -d= -f2 | tr -d '"')
+          echo "VERSION=${VERSION}-r${REL}" >> $GITHUB_OUTPUT
+
+      - name: Create Release (DEBUG)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.VERSION }}-DEBUG
+          name: NSS-Switch v${{ steps.get_version.outputs.VERSION }} (DEBUG)
+          body: |
+            > **⚠️ WORK IN PROGRESS**
+            A selective CPU bypass manager for Qualcomm NSS (Network Subsystem) on OpenWrt.
+            This tool allows you to mark specific connections so they are processed by the **CPU** instead of the **NSS hardware accelerator**.
+            Useful (and **needed**) for:
+            - Traffic that needs deep inspection (e.g., `tcpdump`, `bandwidthd`, `snort`)
+            - Debugging or troubleshooting NSS offload issues
+            - Per-flow bypass rules without disabling NSS globally
+            **No service/network restart required to bypass (hot-swapping) any NSS connection.**
+            > 📌 See [`CHANGELOG.md`](https://github.com/alexandrglm/openwrt_NSS_Bypass_tool/blob/main/CHANGELOG.md) for detailed history and pending work.
+            ## Installation on OpenWrt
+            ### Pre-requisites
+            - [X] OpenWrt 25.12+ with NSS (QCA SSDK) enabled
+            - [X] Full `conntrack` / `nftables` support
+            ### APK file
+            ```bash
+            apk add /path/to/nss-switch-${{ steps.get_version.outputs.VERSION }}_DEBUG.apk --allow-untrusted
+            ```
+            > RSA public key is included in the repository/releases so it can be added to `/etc/apk/keys/` directly, making the `--allow-untrusted` flag unnecessary.
+          files: |
+            /github/home/packages/**/*.apk
+            ~/.abuild/nss-switch.rsa.pub
+            source.tar.gz
+          prerelease: true
+          draft: false
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nss-switch-apk
+          path: /github/home/packages/**/*.apk
+          if-no-files-found: error

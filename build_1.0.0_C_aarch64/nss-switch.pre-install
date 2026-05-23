@@ -1,0 +1,70 @@
+#!/bin/ash
+# 1.0.0-r1 aarch64 pre-install
+
+# IS_NSS_PLATFORM=0
+
+log() {
+    echo "[NSS-Switch] $*" > /dev/kmsg 2>/dev/null || true
+    echo "[NSS-Switch] $*" >&2
+}
+
+
+check_nss_platform() {
+    if lsmod 2>/dev/null | grep -q "qca_nss_drv"; then
+        # IS_NSS_PLATFORM=1
+    else
+        # IS_NSS_PLATFORM=0
+        log "⚠️  NSS hardware NOT detected"
+        log "   This is normal on non-Qualcomm devices or when NSS is disabled in firmware"
+        log "   The tool will still work, but in SFE mode (Software Offload)"
+    fi
+}
+
+check_nss_platform
+
+install_pkg_dependencies() {
+    local pkg="$1"
+    local output
+    output=$(apk add "$pkg" 2>&1)
+    local ret=$?
+    if [ $ret -ne 0 ]; then
+        echo "$output"
+        return $ret
+    fi
+    return 0
+}
+
+log "Checking dependencies..."
+
+# Verificar si conntrackd está instalado
+if ! command -v conntrackd >/dev/null 2>&1; then
+    log "Installing conntrackd..."
+    output=$(install_pkg_dependencies conntrackd)
+    if [ $? -ne 0 ]; then
+        log "ERROR: Failed to install conntrackd"
+        log "Reason: $output"
+        log "Please install manually: apk add conntrackd"
+        exit 1
+    fi
+    log "conntrackd installed successfully"
+fi
+
+# Verificar si conntrack está instalado (a veces viene con conntrackd, a veces no)
+if ! command -v conntrack >/dev/null 2>&1; then
+    log "Installing conntrack..."
+    output=$(install_pkg_dependencies conntrack)
+    if [ $? -ne 0 ]; then
+        # Intentar con conntrackd (algunas versiones incluyen conntrack)
+        if ! command -v conntrack >/dev/null 2>&1; then
+            log "ERROR: Failed to install conntrack"
+            log "Reason: $output"
+            log "Please install manually: apk add conntrack"
+            exit 1
+        fi
+    fi
+    log "conntrack installed successfully"
+fi
+
+log "Prerequisites satisfied. Starting NSS-Switch installation."
+
+exit 0
