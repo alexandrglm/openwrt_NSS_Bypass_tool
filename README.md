@@ -1,7 +1,8 @@
 # NSS-Switch - QualcommAX NSS Bypass Tool
 
 A selective CPU bypass manager for Qualcomm NSS (Network Subsystem) on OpenWrt.  
-This tool allows you to mark specific connections so they are processed by the **CPU** instead of the **NSS hardware accelerator**. Also compatible with any platform using SFE Software Offload.
+This tool allows you to mark specific connections so they are processed by the **CPU** instead of the **NSS hardware accelerator**.  
+Also compatible with MediaTek PPE/HNAT, other SFE solutions and Software Flow Offload.
 
 ![](./DOCS/img/watch.png)
 
@@ -47,7 +48,7 @@ nss-switch watch 5
 | `nss-switch add [options]` | Manually add a bypass rule. |
 | `nss-switch list` | List all defined bypass rules. |
 | `nss-switch remove <id>` | Remove a bypass rule by ID. |
-| `nss-switch kill <id>|[--options]` | Kill active connections matching rule ID, or --flags. |
+| `nss-switch kill <id> or [--options]` | Kill active connections matching rule ID, or --flags. |
 | `nss-switch flush [--rules\|--all\|--temp]` | Remove rules from nftables. |
 | `nss-switch apply` | Re-apply `rules.conf` to nftables. |
 | `nss-switch status` | Show full status dashboard (ECM state, rules, conntrack). |
@@ -146,18 +147,15 @@ Mark 0x00010000 to desired packet -> Makes an ECM defunct -> So, CPU handles thi
 ---
 
 # 🧪 Status
-
-| Component | Status |
+| | |
 |---|---|
-| `ipq807x` (e.g., Xiaomi AX3600) | ✅ Fully tested and functional |
-| Other NSS SoCs (`ipq607x`, `ipq501x`) | ❌ Not tested , no hardware available for development |
-| ECM frontend detection | ✅ Works with Hardware Offloading (NSS), also Software Offloading (SFE) |
-| `nftables` + `conntrack` integration | ✅ Fully working |
-| Interactive shell UI (`watch`, `pick`) | ✅ Working with native shell & C compiled components |
-| Persistent rules | ✅ Survive reboots via `rules.conf` and `fw4` includes |
+| Qualcomm NSS (ipq807x, ipq60xx, ipq50xx) | ✅ Tested on ipq807x, expected to work on others |
+| Other offload engines (SFE, PPE, Flowtable) | ✅ Compatible, not tested, expected to work |
+| `nftables` + `conntrack` | ✅ Fully working |
+| Interactive UI (watch/pick) | ✅ Working |
+| Persistent rules | ✅ Survive reboots |
 
-> 📌 Check [`CHANGELOG.md`](./CHANGELOG.md) for detailed history / [`PENDING.md`](./PENDING.md) for pending work.
-
+> 📌 See [`CHANGELOG.md`](./CHANGELOG.md) for details / [`PENDING.md`](./PENDING.md) for pending work.
 
 ---
 
