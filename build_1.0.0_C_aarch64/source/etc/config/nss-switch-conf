@@ -1,5 +1,5 @@
 # NSS-Switch global configuration
-# /usr/bin/NSS-Switch/config
+# /etc/config/nss-switch-conf
 
 # Default persistence mode for new rules: yes | no
 PERSIST_DEFAULT=no
@@ -17,11 +17,11 @@ NFT_CHAIN_PRE="nss_bypass_pre"
 NFT_CHAIN_POST="nss_bypass_post"
 
 # State and rules file
-RULES_FILE=/usr/bin/NSS-Switch/state/rules.conf
-DEBUG_LOG=/usr/bin/NSS-Switch/state/debug.log
+RULES_FILE=/etc/nss-switch/rules.conf
+DEBUG_LOG=/tmp/nss-switch.log
 
 # Firewall hook script (auto-generated, loaded by fw4)
-FW_SCRIPT=/usr/bin/NSS-Switch/firewall.d/nss-bypass
+FW_SCRIPT=/etc/firewall.d/nss-bypass-rules
 
 # Watch refresh interval in seconds
 WATCH_INTERVAL=3

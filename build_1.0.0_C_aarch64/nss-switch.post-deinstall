@@ -1,0 +1,24 @@
+#!/usr/bin/env ash
+# NSS-Switch post-removal script
+# Runs after APK removes files
+
+log() {
+    echo "[NSS-Switch] $*" > /dev/kmsg 2>/dev/null || true
+    echo "[NSS-Switch] $*" >&2
+}
+
+log "Post-removal starting..."
+
+# 1. Remove configuration files
+rm -f /etc/config/nss-switch-conf 2>/dev/null
+rm -rf /etc/nss-switch 2>/dev/null
+log "Configuration files removed"
+
+# 2. Final firewall restart to ensure clean state
+if [ -x /etc/init.d/firewall ]; then
+    /etc/init.d/firewall restart 2>/dev/null
+    log "Firewall restarted"
+fi
+
+log "NSS-Switch post-removal completed successfully"
+exit 0

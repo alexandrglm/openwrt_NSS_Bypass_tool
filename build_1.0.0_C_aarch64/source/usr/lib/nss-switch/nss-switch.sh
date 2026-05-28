@@ -1,6 +1,6 @@
 #!/usr/bin/env ash
 # nss-switch.sh — Qualcomm NSS selective bypass manager
-# /usr/bin/NSS-Switch/nss-switch.sh
+# /usr/lib/nss-switch/nss-switch.sh symlinked to /usr/bin/nss-switch
 # ASH compatible — BusyBox v1.37+
 # Usage: nss-switch <command> [options]
 
@@ -10,7 +10,7 @@
 SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
 # ─── Load config ──────────────────────────────────────────────────────────────
-CONFIG_FILE="$SELF_DIR/config"
+CONFIG_FILE=/etc/config/nss-switch-conf
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "[ERR ] Config file not found: $CONFIG_FILE" >&2
     exit 1
@@ -19,21 +19,24 @@ fi
 
 # ─── Debug logging helper (available before libs load) ────────────────────────
 dbg() {
+    # Solo proceder si debug está activado
+    if [ "${DEBUG:-0}" != "1" ] && [ "$DEBUG_MODE" != "yes" ]; then
+        return 0
+    fi
+
+    [ -f "$DEBUG_LOG" ] || return 0
+
     local ts
     ts=$(date '+%Y-%m-%d %H:%M:%S')
-    if [ "${DEBUG:-0}" = "1" ] || [ "$DEBUG_MODE" = "yes" ]; then
-        printf "[DBG ] %s\n" "$*" >&2
-        printf "%s [DBG] %s\n" "$ts" "$*" >> "$DEBUG_LOG" 2>/dev/null || true
-    else
-        printf "%s [DBG] %s\n" "$ts" "$*" >> "$DEBUG_LOG" 2>/dev/null || true
-    fi
+    printf "[DBG ] %s\n" "$*" >&2
+    printf "%s [DBG] %s\n" "$ts" "$*" >> "$DEBUG_LOG" 2>/dev/null || true
 }
 
 # ─── Load libraries ───────────────────────────────────────────────────────────
 for lib in chandler ui ecm conntrack nft detect rules; do
     lib_file="$SELF_DIR/lib/${lib}.sh"
     if [ ! -f "$lib_file" ]; then
-        echo "[ERR ] Missing library: $lib_file" >&2
+        echo "[ERR ] Missing lib: $lib_file" >&2
         exit 1
     fi
     . "$lib_file"
@@ -42,11 +45,6 @@ done
 DEBUG_LIB="$SELF_DIR/lib/debug.sh"
 if [ -f "$DEBUG_LIB" ]; then
     . "$DEBUG_LIB"
-else
-    cmd_debug_monitor() {
-        ui_error "debug.sh should not be visible in PRODUCTION, monitor NOT available, sorry!"
-        return 1
-    }
 fi
 
 # ─── Root check ───────────────────────────────────────────────────────────────
@@ -98,7 +96,7 @@ cmd_watch() {
         exit 0
     ' INT TERM
 
-    # Hide cursor (but NO alt_screen)
+    # HAVE cursor (but NO alt_screen)
     ui_cursor_show
 
     # ── First run: show loading indicator ───────────────────────────────────
@@ -250,6 +248,7 @@ cmd_pick() {
     # Make a permanent copy for the selection phase
     cp "$_pick_tmp" "$_selection_tmp"
 
+
     # Display ALL connections (uses normal terminal mode, scroll works!)
     if ! ui_pick_display_normal "$_pick_tmp" "$total"; then
         rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
@@ -264,7 +263,6 @@ cmd_pick() {
     # Now read from the SELECTION tmpfile
     local conn_line
     conn_line=$(awk -F'|' -v n="$sel" '$1==n {print; exit}' "$_selection_tmp" 2>/dev/null)
-
     # Clean up tmpfiles
     rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
     rm -f /tmp/nss-iface.* 2>/dev/null
@@ -308,27 +306,36 @@ cmd_pick() {
     local r_proto="any" r_src_ip="any" r_dst_ip="any"
     local r_sport="any" r_dport="any" r_iface="any"
 
+    # Protocolo
     if ui_ask_yn "Match on protocol ($proto)?" y; then
         r_proto="$proto"
     fi
+
+    # Source IP
     if ui_ask_yn "Match on source IP ($src_ip)?" n; then
-        ui_ask_input "Enter source IP/CIDR (or press Enter to keep '$src_ip')" "$src_ip"
+        ui_ask_input "Enter source IP/CIDR (or press Enter to keep '$src_ip')" "$src_ip" "ip"
         r_src_ip="$UI_INPUT"
     fi
+
+    # Destination IP
     if ui_ask_yn "Match on destination IP ($dst_ip)?" n; then
-        ui_ask_input "Enter destination IP/CIDR (or press Enter to keep '$dst_ip')" "$dst_ip"
+        ui_ask_input "Enter destination IP/CIDR (or press Enter to keep '$dst_ip')" "$dst_ip" "ip"
         r_dst_ip="$UI_INPUT"
     fi
+
+    # Puertos (solo si protocolo es tcp/udp)
     if [ "$proto" = "tcp" ] || [ "$proto" = "udp" ]; then
         if ui_ask_yn "Match on source port ($src_port)?" n; then
-            ui_ask_input "Source port" "$src_port"
+            ui_ask_input "Source port" "$src_port" "port"
             r_sport="$UI_INPUT"
         fi
         if ui_ask_yn "Match on destination port ($dst_port)?" n; then
-            ui_ask_input "Destination port" "$dst_port"
+            ui_ask_input "Destination port" "$dst_port" "port"
             r_dport="$UI_INPUT"
         fi
     fi
+
+    # Interfaz
     if [ "$iface" != "?" ] && [ -n "$iface" ]; then
         case "$iface" in
             local:*)
@@ -346,6 +353,7 @@ cmd_pick() {
         esac
     fi
 
+    # Persistencia
     local persist="$PERSIST_DEFAULT"
     if ui_ask_yn "Make this rule persistent (survive reboot)?" "$([ "$PERSIST_DEFAULT" = "yes" ] && echo y || echo n)"; then
         persist="yes"
@@ -353,7 +361,9 @@ cmd_pick() {
         persist="no"
     fi
 
-    ui_ask_input "Comment for this rule" "bypass from pick: $src_ip -> $dst_ip"
+    # Comentario
+    local default_comment="bypass from pick: $src_ip -> $dst_ip"
+    ui_ask_input "Comment for this rule" "$default_comment" "string"
     local comment="$UI_INPUT"
 
     ui_section "Rule Preview"
@@ -369,7 +379,8 @@ cmd_pick() {
 
     rm -f /tmp/nss-iface.* 2>/dev/null
 
-    if ! rules_validate "$r_proto" "$r_src_ip" "$r_dst_ip" "$r_sport" "$r_dport" "$r_iface"; then
+    # Validar regla completa incluyendo comentario
+    if ! rules_validate "$r_proto" "$r_src_ip" "$r_dst_ip" "$r_sport" "$r_dport" "$r_iface" "$comment"; then
         ui_error "Validation failed — rule not added"
         return 1
     fi
@@ -601,17 +612,15 @@ cmd_debug() {
             ui_ok "ECM service restarted"
             ;;
         log)
-            ui_section "NSS-Switch Debug Log (last 50 lines)"
-            if [ -f "$DEBUG_LOG" ]; then
-                tail -50 "$DEBUG_LOG"
-            else
-                ui_warn "No log file yet: $DEBUG_LOG"
-            fi
+            cmd_debug_log
             ;;
         log-clear)
-            check_root
-            > "$DEBUG_LOG"
-            ui_ok "Log cleared"
+            if [ -f "$DEBUG_LOG" ]; then
+                > "$DEBUG_LOG"
+                ui_ok "Debug log cleared"
+            else
+                ui_warn "Debug log not active or not found"
+            fi
             ;;
         rules-raw)
             ui_section "Raw rules.conf"
@@ -642,7 +651,7 @@ cmd_debug_help() {
     printf "  %-25s %s\n" "defunct-all"      "Force defunct ALL connections in ECM"
     printf "  %-25s %s\n" "frontend-stop [ipv4|ipv6|both]" "Stop NSS frontend(s)"
     printf "  %-25s %s\n" "frontend-restart" "Restart ECM service"
-    printf "  %-25s %s\n" "log"              "Show last 50 lines of debug log"
+    printf "  %-25s %s\n" "log"              "Enable/Disable debugging log"
     printf "  %-25s %s\n" "log-clear"        "Clear debug log"
     printf "  %-25s %s\n" "rules-raw"        "Show raw rules.conf content"
     printf "  %-25s %s\n" "script-raw"       "Show raw generated firewall script"

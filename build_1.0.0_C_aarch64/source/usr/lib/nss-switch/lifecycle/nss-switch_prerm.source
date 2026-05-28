@@ -2,10 +2,9 @@
 # NSS-Switch pre-removal script
 # Runs before APK removes files
 
-# 1.0.0-r1 aarch64
-
 NSS_MARK=0x00010000
-FIREWALL_LINK=/etc/firewall.d/nss-bypass
+INSTALL_DIR=/usr/lib/nss-switch
+FW_SCRIPT=/etc/firewall.d/nss-bypass-rules
 FW_CONF=/etc/config/firewall
 
 log() {
@@ -50,22 +49,25 @@ if [ -f /sys/kernel/debug/ecm/ecm_db/defunct_all ]; then
     log "ECM defuncted (will re-accelerate normally)"
 fi
 
-# 4. Remove UCI include from firewall config
-if grep -q "nss_bypass_include" "$FW_CONF" 2>/dev/null; then
-    sed -i "/config include 'nss_bypass_include'/,+2d" "$FW_CONF"
+# 4. Remove UCI include from firewall config using uci
+if uci -q get firewall.nss_bypass_include.type >/dev/null 2>&1; then
+    uci -q delete firewall.nss_bypass_include
+    uci -q commit firewall
     log "UCI include removed from $FW_CONF"
 fi
 
-# 5. Remove symlinks
+# 5. Remove symlink
 rm -f /usr/bin/nss-switch 2>/dev/null
-rm -f "$FIREWALL_LINK" 2>/dev/null
-log "Symlinks removed"
+log "Symlink removed"
 
-# 5.1 Remove entire dir
-log "Removing /usr/bin/NSS-Switch directory"
-rm -rf /usr/bin/NSS-Switch 2>/dev/null || true
+# 6. Remove firewall script
+rm -f "$FW_SCRIPT" 2>/dev/null
+log "Firewall script removed"
 
-# 6. Restart firewall to clean up
+# NOTA: No eliminamos /etc/config/nss-switch-conf ni /etc/nss-switch/rules.conf
+# porque son configuraciones del usuario que deben persistir si reinstala
+
+# 7. Restart firewall to clean up
 if [ -x /etc/init.d/firewall ]; then
     /etc/init.d/firewall restart 2>/dev/null
     log "Firewall restarted"

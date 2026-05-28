@@ -1,0 +1,59 @@
+#!/usr/bin/env ash
+# 1.0.0-r1 aarch64
+# NSS-Switch post-installation script
+# Runs after APK installs files
+
+INSTALL_DIR=/usr/lib/nss-switch
+CONFIG_FILE=/etc/config/nss-switch-conf
+RULES_FILE=/etc/nss-switch/rules.conf
+FW_SCRIPT=/etc/firewall.d/nss-bypass-rules
+FW_CONF=/etc/config/firewall
+
+log() {
+    echo "[NSS-Switch] $*" > /dev/kmsg 2>/dev/null || true
+    echo "[NSS-Switch] $*" >&2
+}
+
+log "Post-install starting..."
+
+# 1. Set permissions
+chmod 755 "$INSTALL_DIR/nss-switch.sh"
+[ -f "$CONFIG_FILE" ] && chmod 644 "$CONFIG_FILE"
+chmod 755 "$INSTALL_DIR/lib/"*.sh 2>/dev/null || true
+[ -f "$INSTALL_DIR/bin/nss-ct-dump" ] && chmod 755 "$INSTALL_DIR/bin/nss-ct-dump"
+[ -f "$FW_SCRIPT" ] && chmod 755 "$FW_SCRIPT"
+[ -f "$RULES_FILE" ] && chmod 644 "$RULES_FILE"
+
+log "Permissions set"
+
+# 2. Create symlink in PATH
+if [ ! -L /usr/bin/nss-switch ]; then
+    ln -sf "$INSTALL_DIR/nss-switch.sh" /usr/bin/nss-switch
+    log "Symlink created: /usr/bin/nss-switch"
+fi
+
+# 3. Ensure firewall.d script is correctly referenced (no symlink needed, it's already there)
+# The APKBUILD installs the script directly to /etc/firewall.d/nss-bypass-rules
+log "Firewall script ready at $FW_SCRIPT"
+
+# 4. Add UCI include to firewall config using uci commands
+if ! uci -q get firewall.nss_bypass_include.type >/dev/null 2>&1; then
+    uci add firewall include > /dev/null 2>&1
+    uci rename firewall.@include[-1]="nss_bypass_include" 2>/dev/null
+    uci set firewall.nss_bypass_include.type='script' 2>/dev/null
+    uci set firewall.nss_bypass_include.path="$FW_SCRIPT" 2>/dev/null
+    uci commit firewall 2>/dev/null
+    log "UCI include added to $FW_CONF"
+else
+    log "UCI include already present"
+fi
+
+# 5. Apply rules (if nft available)
+if command -v nft >/dev/null 2>&1; then
+    "$INSTALL_DIR/nss-switch.sh" apply 2>/dev/null && log "NSS-Switch rules applied" || log "Warning: could not apply rules, run 'nss-switch apply' manually"
+else
+    log "Warning: nftables not available, run 'nss-switch apply' after firewall is ready"
+fi
+
+log "NSS-Switch post-install completed successfully"
+exit 0

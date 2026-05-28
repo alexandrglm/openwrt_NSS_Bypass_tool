@@ -1,5 +1,93 @@
 #  Changelog
 
+## 27 May 2026:
+
+### OpenWrt PR Review Fixes Part 1
+
+* **fix(paths):**
+  * Relocated all package files to standard FHS paths: `/usr/lib/nss-switch/` for binaries/libraries, `/etc/config/nss-switch-conf` for configuration, `/etc/nss-switch/rules.conf` for persistent rules, and `/etc/firewall.d/nss-bypass-rules` for firewall hooks.
+  * Fixed Makefile installation paths to match new directory structure.
+  * Removed hardcoded interface names (`lan2`, `lan3`, etc.) from `_normalize_iface_rule()`; now only strips direction prefixes (`out:`, `in:`, `local:`).
+
+* **fix(nft):**
+  - **IPv4/IPv6 support:** `_nft_emit_rule()` now detects IP version and uses `ip saddr/daddr` for IPv4, `ip6 saddr/daddr` for IPv6.
+  - **Port rules:** No longer generates invalid syntax when `proto=any` with port macthes; ports only added when protocol is specified.
+  - **Comment escaping:** User-provided comments sanitised to prevent nftables syntax errors and command injection.
+  - **Interface direction:** `local:` prefix now correctly maps to `oifname` (router-originated traffic), while unprefixed interfaces map to `iifname` (normal ingress).
+
+* **fix(interface validation):**
+  - `nft_validate_iface()` now strips direction prefixes (`out:`, `in:`, `local:`) before validating interface existance with `ip link show`.
+
+* **fix(conntrack clearing):**
+  - `ct_clear_rule_marks()` no longer appends duplicate `-s` filter when `--src-ip` is already specified; interface-derived subnet is only added when no source IP is provided.
+
+* **fix(UCI integration):**
+  - Replaced direct config file editing (`sed`/`printf >>`) with proper `uci` commands for adding and removing firewall include sections (`_nft_ensure_uci_include`, `_nft_remove_uci_include`).
+  - Fixed `prerm` UCI existence check: now uses `uci -q get firewall.nss_bypass_include.type` instead of invalid `uci get firewall.nss_bypass_include`.
+
+* **fix(debug logging):**
+  - `DEBUG_LOG` (`/tmp/nss-switch.log`) is now only created when debug is explicitly enabled via `nss-switch debug log` menu.
+  - `dbg()` function no longer writes to log unless debug is active AND log file exists.
+  - `nft_apply()` only redirects firewall reload output to debug log when debug is enabled.
+
+* **fix(cursor restoration):**
+  - Corrected `ui_cursor_show` --> `ui_cursor_hide` in `cmd_watch()` (comment said hide, code was showing).
+
+* **fix(dependencies):**
+  - Removed unnecessary `conntrackd` dependency from Makefile (only `conntrack` is required).
+
+* **fix(port extraction in UI):**
+  - `ui_conn_row()` now correctly extracts destination port from `ip:port`, `[ipv6]:port`, and `ip#port` formats using `case` statement.
+
+* **fix(comment validation):**
+  - Added `nft_validate_comment()` to reject forbidden characters (`;`, `"`, `'`, `\`, `$`, `|`, control chars) in rule comments.
+
+* **fix(input validation in `pick`):**
+  - `ui_ask_input()` now supports type validation: `ip`, `port`, `proto`, `string`. Invalid inputs are rejected and retried.
+
+* **fix(`ui_ask_yn`):**
+  - Now strictly accepts `y/Y/yes/YES` or `n/N/no/NO`; any other input (including garbage) is rejected and reprompts. `q/Q` cancels the entire operation.
+
+* **fix(rule listing UI alignment):**
+  - Implemented dynamic column width calculation in `rules_list()` to avoid hardcoded widths that broke layout; colours preserved for ID, PERSIST, and COMMENT fields.
+
+* **fix(nss-ct-dump binary performance):**
+  - `get_nss_state()` now caches `access()` results for debugfs paths (`ecm_nss_ipv4`, `ecm_sfe_ipv4`), eliminating redundant syscalls on every conntrack line (optimisation for large connection tables).
+
+* **fix(C interface resolution):**
+  - `get_iface_for_ip()` simplified: no longer attempts to parse MAC addresses or bridge names; returns `lo` for router-local IPs, otherwise passes through `ip route get` output unchanged.
+  - Removed `normalize_iface()` hardcoded transformations (`pppoe-wan` -> `wan`, `br-lan` ->`lan`); interface names now appear as-is.
+
+* **fix(protocol display):**
+  - Expanded protocol number-to-name mapping in C binary to include all common protocols (GRE, ESP, AH, SCTP, etc.) using data from `/etc/protocols` for visual display while preserving numeric values for nftables rules.
+
+### New Features & Enhancements (beyond PR review)
+
+* **feat(offload engine compatibility):**
+  - Complete rewrite of `ecm.sh` to support multiple offload engines:
+    - **NSS** --> Qualcomm NSS hardware offload (ECM debugfs)
+    - **SFE_ECM** --> Qualcomm SFE as ECM frontend
+    - **SFE** --> Qualcomm SFE standalone (`/dev/sfe`, `shortcut_fe` module)
+    - **MTK_PPE** --> MediaTek PPE/HNAT hardware offload (`/sys/kernel/debug/ppe0`)
+    - **SW_FLOW** --> Linux `nf_flow_table` software flow offload
+  - Unified API (`ecm_frontend`, `ecm_defunct_all`, `ecm_restart`, `ecm_connections`, `ecm_stats`) works across all engines.
+  - Added `offload_detect()` with result caching to avoid redundant detection.
+  - `detect_check_all()` now shows engine-specific information and warnings.
+
+* **feat(UI improvements):**
+  - `ui_ask_input` now validates IP addresses, ports, and protocols in real-time.
+  - `debug log` command now interactive: shows status, last lines, and prompts to enable/disable logging.
+  - Better coloured output in `nss-switch list`.
+
+* **feat(ECM connections parser):**
+  - `ecm_connections()` now parses connection data directly from engine sources (ecm_dump.sh, /dev/sfe, PPE debugfs, conntrack) without external dependencies.
+
+* **refactor(build system):**
+  - Restructured package directories to follow OpenWrt and FHS standards.
+  - Makefile now explicitly lists all library scripts (no wildcards).
+  - `preinst` detects offload engine type and reports to user during installation.
+
+  
 ### 22 May 2026: Release v1.0.0 (aarch64, C compiled components)
 
 - **Architecture:** native aarch64 support for Qualcomm IPQ807x / NSS platform

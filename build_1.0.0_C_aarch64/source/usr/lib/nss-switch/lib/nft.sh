@@ -5,7 +5,7 @@
 # ASH compatible, BusyBox v1.37+
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
-NFT_INCLUDE_LINK=/etc/firewall.d/nss-bypass
+NFT_INCLUDE_LINK=/etc/firewall.d/nss-bypass-rules
 NFT_RULES_HEADER="# NSS-Switch managed rules — do not edit manually"
 
 # ─── Check nft binary ─────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ nft_generate_script() {
     c1='"NSS-Switch: save bypass mark to conntrack"'
     c2='"NSS-Switch: restore bypass mark from conntrack"'
 
-    echo '#!/bin/sh'                                                                   > "$FW_SCRIPT"
+    echo '#!/bin/ash'                                                                   > "$FW_SCRIPT"
     echo '# NSS-Switch firewall.d hook — auto-generated, do not edit manually'       >> "$FW_SCRIPT"
     echo "# Generated: $(date)"                                                       >> "$FW_SCRIPT"
     echo ''                                                                            >> "$FW_SCRIPT"
@@ -81,49 +81,85 @@ _nft_emit_rule() {
     local src_port="$5" dst_port="$6" iface="$7" comment="$8"
     local match=""
 
-
+    # 1. Manejo de interfaz - respetar exactamente lo que el usuario especificó
     if [ "$iface" != "any" ]; then
         case "$iface" in
             out:*)
-                local out_iface="${iface#out:}"
-                out_iface=$(_normalize_iface_rule "$out_iface")
-                match="${match} oifname \"${out_iface}\""
+                # Usuario especificó out: explícitamente
+                local real_iface="${iface#out:}"
+                match="${match} oifname \"${real_iface}\""
+                ;;
+            local:*)
+                # Usuario eligió una interfaz local (tráfico del router)
+                local real_iface="${iface#local:}"
+                match="${match} oifname \"${real_iface}\""
                 ;;
             *)
-                local norm_iface
-                norm_iface=$(_normalize_iface_rule "$iface")
-                match="${match} iifname \"${norm_iface}\""
+                # Usuario especificó interfaz normal (sin prefijo)
+                match="${match} iifname \"${iface}\""
                 ;;
         esac
     fi
-    [ "$proto"    != "any" ] && match="${match} meta l4proto ${proto}"
-    [ "$src_ip"   != "any" ] && match="${match} ip saddr ${src_ip}"
-    [ "$dst_ip"   != "any" ] && match="${match} ip daddr ${dst_ip}"
-    [ "$src_port" != "any" ] && match="${match} ${proto} sport ${src_port}"
-    [ "$dst_port" != "any" ] && match="${match} ${proto} dport ${dst_port}"
 
+    # 2. Protocolo
+    [ "$proto" != "any" ] && match="${match} meta l4proto ${proto}"
+
+    # 3. IP origen - detectar IPv4 vs IPv6 por el formato
+    if [ "$src_ip" != "any" ]; then
+        case "$src_ip" in
+            *:*) match="${match} ip6 saddr ${src_ip}" ;;
+            *)   match="${match} ip saddr ${src_ip}" ;;
+        esac
+    fi
+
+    # 4. IP destino - detectar IPv4 vs IPv6 por el formato
+    if [ "$dst_ip" != "any" ]; then
+        case "$dst_ip" in
+            *:*) match="${match} ip6 daddr ${dst_ip}" ;;
+            *)   match="${match} ip daddr ${dst_ip}" ;;
+        esac
+    fi
+
+    # 5. Puertos - SOLO si proto no es any
+    if [ "$proto" != "any" ]; then
+        [ "$src_port" != "any" ] && match="${match} ${proto} sport ${src_port}"
+        [ "$dst_port" != "any" ] && match="${match} ${proto} dport ${dst_port}"
+    fi
+
+    # 6. Verificar que hay al menos un criterio
     if [ -z "$(echo "$match" | tr -d ' ')" ]; then
         printf "    # SKIPPED rule id=%s — no match criteria\n" "$id" >> "$FW_SCRIPT"
         return
     fi
 
-    printf "    # Rule id=%s: %s\n" "$id" "$comment"                                 >> "$FW_SCRIPT"
-    printf "    nft add rule inet fw4 %s %s ct mark set ct mark or %s comment '\"NSS-Switch id=%s: %s\"'\n" \
-        "$NFT_CHAIN_PRE" "$match" "$NSS_MARK" "$id" "$comment"                       >> "$FW_SCRIPT"
-}
+    # 7. Escapar comillas simples en el comentario para seguridad
+    local safe_comment
+    safe_comment=$(printf "%s" "$comment" | sed "s/'/'\\\\''/g")
 
+    printf "    # Rule id=%s: %s\n" "$id" "$safe_comment" >> "$FW_SCRIPT"
+    printf "    nft add rule inet fw4 %s %s ct mark set ct mark or %s comment '\"NSS-Switch id=%s: %s\"'\n" \
+        "$NFT_CHAIN_PRE" "$match" "$NSS_MARK" "$id" "$safe_comment" >> "$FW_SCRIPT"
+}
 # ─── Apply: generate script and reload firewall ───────────────────────────────
 nft_apply() {
     nft_generate_script || return 1
     _nft_ensure_fw4_include
-    dbg "Reloading firewall"
-    /etc/init.d/firewall restart >> "$DEBUG_LOG" 2>&1
+
+    if [ "${DEBUG:-0}" = "1" ] || [ "$DEBUG_MODE" = "yes" ]; then
+        dbg "Reloading firewall"
+        /etc/init.d/firewall reload >> "$DEBUG_LOG" 2>&1
+    else
+        /etc/init.d/firewall reload > /dev/null 2>&1
+    fi
+
     ui_ok "Firewall reloaded, NSS-Switch rules applied"
 }
 
-# ─── Ensure /etc/firewall.d/nss-bypass exists and points to our script ────────
+# ─── Ensure /etc/firewall.d/nss-bypass but in the proper way ────────
 _nft_ensure_fw4_include() {
-    local target="/etc/firewall.d/nss-bypass"
+    # DEBUG
+    # LO hardcodeo, porque querré exportar esta y otras funcs a C
+    local target="/etc/firewall.d/nss-bypass-rules"
     if [ ! -e "$target" ] && [ ! -L "$target" ]; then
         dbg "Creating symlink $target -> $FW_SCRIPT"
         ln -s "$FW_SCRIPT" "$target"
@@ -140,24 +176,31 @@ _nft_ensure_fw4_include() {
 
 # ─── Ensure UCI include block exists in /etc/config/firewall ──────────────────
 _nft_ensure_uci_include() {
-    local fw_conf=/etc/config/firewall
-    if ! grep -q "nss_bypass_include" "$fw_conf" 2>/dev/null; then
-        dbg "Adding UCI include to $fw_conf"
-        printf "\nconfig include 'nss_bypass_include'\n\toption type 'script'\n\toption path '/etc/firewall.d/nss-bypass'\n" \
-            >> "$fw_conf"
+    if ! uci -q show firewall.nss_bypass_include >/dev/null 2>&1; then
+        dbg "Adding UCI include for nss-bypass"
+        # DEBUG -> Evaluate possible error warns
+        # uci add firewall include > /dev/null
+        if ! uci add firewall include > /dev/null 2>&1; then
+            ui_error "Failed to add UCI include"
+            return 1
+        fi
+        uci rename firewall.@include[-1]="nss_bypass_include"
+        uci set firewall.nss_bypass_include.type='script'
+        uci set firewall.nss_bypass_include.path='/etc/firewall.d/nss-bypass'
+        uci commit firewall
         ui_ok "UCI include added to /etc/config/firewall"
     fi
 }
 
 # ─── Remove UCI include from /etc/config/firewall ────────────────────────────
 _nft_remove_uci_include() {
-    local fw_conf=/etc/config/firewall
-    if grep -q "nss_bypass_include" "$fw_conf" 2>/dev/null; then
-        sed -i "/config include 'nss_bypass_include'/,+2d" "$fw_conf"
-        dbg "UCI include removed from $fw_conf"
+    if uci -q show firewall.nss_bypass_include >/dev/null 2>&1; then
+        dbg "Removing UCI include for nss-bypass"
+        uci -q delete firewall.nss_bypass_include
+        uci -q commit firewall
+        dbg "UCI include removed from /etc/config/firewall"
     fi
 }
-
 # ─── Remove all our nft chains from live ruleset (without reload) ─────────────
 nft_remove_live_chains() {
     dbg "Removing live NSS-Switch chains from nft"
@@ -323,8 +366,66 @@ nft_validate_proto() {
 nft_validate_iface() {
     local iface="$1"
     [ "$iface" = "any" ] && return 0
-    local normalized
-    normalized=$(_normalize_iface_rule "$iface")
-    ip link show "$normalized" >/dev/null 2>&1
+
+    # Limpiar prefijos (out:, in:, local:) antes de validar
+    case "$iface" in
+        out:*)  iface="${iface#out:}" ;;
+        in:*)   iface="${iface#in:}" ;;
+        local:*) iface="${iface#local:}" ;;
+    esac
+
+    # Verificar que la interfaz existe
+    ip link show "$iface" >/dev/null 2>&1
 }
 
+nft_validate_comment() {
+    local comment="$1"
+
+    # 1.    Empty
+    [ -z "$comment" ] && return 0
+
+
+    # 2. ;
+    if echo "$comment" | grep -q ';'; then
+        ui_error "Comment cannot contain semicolon ';'"
+        return 1
+    fi
+
+    # 3. ""
+    if echo "$comment" | grep -q '"'; then
+        ui_error "Comment cannot contain double quotes '\"'"
+        return 1
+    fi
+
+    # 4. ''
+    if echo "$comment" | grep -q "'"; then
+        ui_error "Comment cannot contain single quotes \"'\""
+        return 1
+    fi
+
+    # 5. \\
+    if echo "$comment" | grep -q '\\'; then
+        ui_error "Comment cannot contain backslash '\\'"
+        return 1
+    fi
+
+    # 6. $
+    if echo "$comment" | grep -q '\\$'; then
+        ui_error "Comment cannot contain dollar sign '$'"
+        return 1
+    fi
+
+    # 7. |
+    if echo "$comment" | grep -q '|'; then
+        ui_error "Comment cannot contain pipe '|'"
+        return 1
+    fi
+
+    # 8. [[:cntrl:]]
+    if echo "$comment" | grep -q '[[:cntrl:]]'; then
+        ui_error "Comment cannot contain control characters"
+        return 1
+    fi
+
+    return 0
+}

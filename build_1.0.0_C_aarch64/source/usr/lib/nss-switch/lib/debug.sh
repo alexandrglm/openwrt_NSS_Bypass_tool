@@ -1,12 +1,8 @@
 #!/usr/bin/env ash
 # lib/debug.sh - Real-time monitoring panel for NSS-Switch
 # Usage: nss-switch debug monitor [interface]
-
-# Guardar timestamp de inicio
 DEBUG_SESSION_START=$(date +%Y%m%d_%H%M%S)
 DEBUG_LOG_FILE="/tmp/nss-debug-${DEBUG_SESSION_START}.log"
-
-# Colores para la UI de monitor (usar echo -e)
 MON_GREEN='\033[0;32m'
 MON_RED='\033[0;31m'
 MON_YELLOW='\033[0;33m'
@@ -14,26 +10,16 @@ MON_CYAN='\033[0;36m'
 MON_BOLD='\033[1m'
 MON_DIM='\033[2m'
 MON_RESET='\033[0m'
-
-# Archivos temporales
 PREV_FILE="/tmp/nss-debug-prev-$$"
 RULES_SNAPSHOT="/tmp/nss-debug-rules-$$"
 PID_FILE="/tmp/nss-debug-monitor.pid"
-
-# Variables globales
 total_conn_prev=0
 bypassed_prev=0
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Trap para limpieza al salir
 _debug_cleanup() {
     rm -f "$PREV_FILE" "$RULES_SNAPSHOT" "$PID_FILE" 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Monitor stopped" >> "$DEBUG_LOG_FILE"
     exit 0
 }
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Formatear bytes a human readable (B, KB, MB, GB)
 _format_bytes() {
     local bytes=$1
     [ -z "$bytes" ] && bytes=0
@@ -48,12 +34,8 @@ _format_bytes() {
         echo "${bytes}B"
     fi
 }
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Inicializar captura de valores previos
 _debug_init() {
     rm -f "$PREV_FILE" "$RULES_SNAPSHOT" 2>/dev/null
-
     for iface in lan2 lan3 br-lan pppoe-wan; do
         local stats=$(ip -s link show "$iface" 2>/dev/null)
         if [ -n "$stats" ]; then
@@ -61,28 +43,18 @@ _debug_init() {
             local tx_bytes=$(echo "$stats" | awk '/TX:/{getline; print $1}')
             local rx_packets=$(echo "$stats" | awk '/RX:/{getline; print $2}')
             local tx_packets=$(echo "$stats" | awk '/TX:/{getline; print $2}')
-
             echo "${iface}_rx_pkts=$rx_packets" >> "$PREV_FILE"
             echo "${iface}_tx_pkts=$tx_packets" >> "$PREV_FILE"
             echo "${iface}_rx_bytes=$rx_bytes" >> "$PREV_FILE"
             echo "${iface}_tx_bytes=$tx_bytes" >> "$PREV_FILE"
         fi
     done
-
-    # Guardar snapshot inicial de reglas
     nft list chain inet fw4 nss_bypass_pre 2>/dev/null | grep "comment \"NSS-Switch" > "$RULES_SNAPSHOT"
-
     echo "[$(date '+%H:%M:%S')] Monitor started" >> "$DEBUG_LOG_FILE"
 }
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Obtener valor previo
 _get_prev() {
     grep "^${1}=" "$PREV_FILE" 2>/dev/null | cut -d'=' -f2
 }
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Actualizar valor previo
 _update_prev() {
     if grep -q "^${1}=" "$PREV_FILE" 2>/dev/null; then
         sed -i "s/^${1}=.*/${1}=${2}/" "$PREV_FILE"
@@ -90,9 +62,6 @@ _update_prev() {
         echo "${1}=${2}" >> "$PREV_FILE"
     fi
 }
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Detectar cambios en reglas
 _check_rule_changes() {
     local new_rules="/tmp/nss-debug-newrules-$$"
     nft list chain inet fw4 nss_bypass_pre 2>/dev/null | grep "comment \"NSS-Switch" > "$new_rules"
@@ -101,47 +70,30 @@ _check_rule_changes() {
         local added=$(comm -13 "$RULES_SNAPSHOT" "$new_rules" 2>/dev/null | wc -l)
         local removed=$(comm -23 "$RULES_SNAPSHOT" "$new_rules" 2>/dev/null | wc -l)
         echo "[$(date '+%H:%M:%S')] RULES CHANGED: +$added -$removed" >> "$DEBUG_LOG_FILE"
-
-        # Mostrar reglas nuevas
         comm -13 "$RULES_SNAPSHOT" "$new_rules" 2>/dev/null | while read line; do
             local comment=$(echo "$line" | sed -n 's/.*comment "NSS-Switch id=\([0-9]\+\): \(.*\)".*/\1: \2/p')
             [ -n "$comment" ] && echo "[$(date '+%H:%M:%S')]   ADDED: $comment" >> "$DEBUG_LOG_FILE"
         done
-
-        # Mostrar reglas removidas
         comm -23 "$RULES_SNAPSHOT" "$new_rules" 2>/dev/null | while read line; do
             local comment=$(echo "$line" | sed -n 's/.*comment "NSS-Switch id=\([0-9]\+\): \(.*\)".*/\1: \2/p')
             [ -n "$comment" ] && echo "[$(date '+%H:%M:%S')]   REMOVED: $comment" >> "$DEBUG_LOG_FILE"
         done
-
         cp "$new_rules" "$RULES_SNAPSHOT"
     fi
     rm -f "$new_rules"
 }
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Función principal del monitor
 cmd_debug_monitor() {
     local focus_iface="${1:-lan3}"
-
-    # Verificar dependencias
     command -v nss_stats >/dev/null 2>&1 || { echo "nss_stats not found"; return 1; }
-
-    # Configurar trap para Ctrl+C y salida limpia
     trap '_debug_cleanup; exit 0' INT TERM EXIT
     echo $$ > "$PID_FILE"
-
     echo -e "${MON_BOLD}Starting NSS-Switch Real-Time Monitor${MON_RESET}"
     echo "Log file: $DEBUG_LOG_FILE"
     echo "Focus interface: $focus_iface"
     echo -e "${MON_DIM}Press Ctrl+C to exit${MON_RESET}"
-
     _debug_init
-
-    # Variables para tracking de cambios
     total_conn_prev=$(wc -l < /proc/net/nf_conntrack 2>/dev/null)
     bypassed_prev=$(ct_count_bypassed 2>/dev/null)
-
     while true; do
         clear
 
@@ -384,4 +336,47 @@ cmd_debug_monitor() {
         sleep 2
     done
 
+}
+cmd_debug_log() {
+    local log_exists=0
+    if [ -f "$DEBUG_LOG" ]; then
+        log_exists=1
+    fi
+    ui_section "Debug Log Status"
+    ui_kv "Status" "$([ $log_exists -eq 1 ] && echo "enabled" || echo "disabled")"
+    ui_kv "Log file" "$DEBUG_LOG"
+    if [ $log_exists -eq 1 ]; then
+        echo ""
+        ui_info "Last 5 lines:"
+        tail -5 "$DEBUG_LOG" 2>/dev/null | while read line; do
+            printf "  ${C_DIM}%s${C_RESET}\n" "$line"
+        done
+        echo ""
+        if ui_ask_yn "Show full debug log?" n; then
+            cat "$DEBUG_LOG"
+            echo ""
+        fi
+        if ui_ask_yn "Disable debug logging? (log will be deleted)" n; then
+            rm -f "$DEBUG_LOG"
+            if grep -q "^DEBUG_MODE=" "$CONFIG_FILE"; then
+                sed -i "s/^DEBUG_MODE=.*/DEBUG_MODE=no/" "$CONFIG_FILE"
+            fi
+            ui_ok "Debug logging disabled, log file deleted"
+        fi
+    else
+        ui_info "Debug logging is currently disabled"
+        echo ""
+        if ui_ask_yn "Enable debug logging?" y; then
+            # Crear log con timestamp inicial
+            echo "=== NSS-Switch Debug Log ===" > "$DEBUG_LOG"
+            echo "=== Started: $(date) ===" >> "$DEBUG_LOG"
+            if grep -q "^DEBUG_MODE=" "$CONFIG_FILE"; then
+                sed -i "s/^DEBUG_MODE=.*/DEBUG_MODE=yes/" "$CONFIG_FILE"
+            else
+                echo "DEBUG_MODE=yes" >> "$CONFIG_FILE"
+            fi
+            ui_ok "Debug logging enabled at $DEBUG_LOG"
+            ui_info "Use 'nss-switch debug log' again to disable"
+        fi
+    fi
 }

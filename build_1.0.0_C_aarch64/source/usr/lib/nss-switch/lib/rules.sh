@@ -99,15 +99,59 @@ rules_list() {
         ui_warn "No bypass rules defined"
         return 0
     fi
-    ui_rule_header
+
+    # DEBUG
+    # Vamos a tratar de usar anchos dinamicos, si funciona bien aqui, refactorizaremos para watch y pick
+    # Overrideamos ui_rule_header
+    # Este cambio también afecta en  ui.sh ...creamos  ui_rule_row_dynamic()
+
+    # Calcular anchos máximos basados en el contenido
+    local max_id=2 max_proto=5 max_src=7 max_dst=7 max_sport=5 max_dport=5 max_iface=5 max_persist=7
+    max_id=2
+    max_proto=5
+
     while IFS='|' read -r id proto src_ip dst_ip src_port dst_port iface persist comment; do
         case "$id" in '#'*|'') continue ;; esac
-        ui_rule_row "$id" "$proto" "$src_ip" "$dst_ip" \
-            "$src_port" "$dst_port" "$iface" "$persist" "$comment"
+        [ ${#id} -gt $max_id ] && max_id=${#id}
+        [ ${#proto} -gt $max_proto ] && max_proto=${#proto}
+        [ ${#src_ip} -gt $max_src ] && max_src=${#src_ip}
+        [ ${#dst_ip} -gt $max_dst ] && max_dst=${#dst_ip}
+        [ ${#src_port} -gt $max_sport ] && max_sport=${#src_port}
+        [ ${#dst_port} -gt $max_dport ] && max_dport=${#dst_port}
+        [ ${#iface} -gt $max_iface ] && max_iface=${#iface}
+        [ ${#persist} -gt $max_persist ] && max_persist=${#persist}
     done < "$RULES_FILE"
+
+    [ $max_src -gt 30 ] && max_src=30
+    [ $max_dst -gt 30 ] && max_dst=30
+    [ $max_iface -gt 15 ] && max_iface=15
+
+    local id_fmt="%-${max_id}s"
+    local proto_fmt="%-${max_proto}s"
+    local src_fmt="%-${max_src}s"
+    local dst_fmt="%-${max_dst}s"
+    local sport_fmt="%-${max_sport}s"
+    local dport_fmt="%-${max_dport}s"
+    local iface_fmt="%-${max_iface}s"
+    local persist_fmt="%-${max_persist}s"
+    printf "${BG_MED}${FG_DIM}"
+    printf " ${id_fmt} ${proto_fmt} ${src_fmt} ${dst_fmt} ${sport_fmt} ${dport_fmt} ${iface_fmt} ${persist_fmt} %s" \
+        "ID" "PROTO" "SRC_IP" "DST_IP" "SPORT" "DPORT" "IFACE" "PERSIST" "COMMENT"
+    printf "${C_RESET}\n"
+    ui_sep
+
+    while IFS='|' read -r id proto src_ip dst_ip src_port dst_port iface persist comment; do
+        case "$id" in '#'*|'') continue ;; esac
+        ui_rule_row_dynamic "$id" "$proto" "$src_ip" "$dst_ip" \
+            "$src_port" "$dst_port" "$iface" "$persist" "$comment" \
+            "$max_id" "$max_proto" "$max_src" "$max_dst" \
+            "$max_sport" "$max_dport" "$max_iface" "$max_persist"
+    done < "$RULES_FILE"
+
     ui_sep
     ui_kv "Total rules" "$count"
 }
+
 
 # ─── Clear all rules ──────────────────────────────────────────────────────────
 rules_clear() {
@@ -145,34 +189,16 @@ rules_clear_temp() {
 #       RULE_SPORT RULE_DPORT RULE_IFACE RULE_PERSIST RULE_COMMENT
 rules_parse() {
     local line="$1"
-    # echo "DEBUG rules_parse recibió: [$line]" >&2
 
     RULE_ID=$(echo "$line" | cut -d'|' -f1)
-    # echo "DEBUG RULE_ID = [$RULE_ID]" >&2
-
     RULE_PROTO=$(echo "$line" | cut -d'|' -f2)
-    # echo "DEBUG RULE_PROTO = [$RULE_PROTO]" >&2
-
     RULE_SRC_IP=$(echo "$line" | cut -d'|' -f3)
-    # echo "DEBUG RULE_SRC_IP = [$RULE_SRC_IP]" >&2
-
     RULE_DST_IP=$(echo "$line" | cut -d'|' -f4)
-    # echo "DEBUG RULE_DST_IP = [$RULE_DST_IP]" >&2
-
     RULE_SPORT=$(echo "$line" | cut -d'|' -f5)
-    # echo "DEBUG RULE_SPORT = [$RULE_SPORT]" >&2
-
     RULE_DPORT=$(echo "$line" | cut -d'|' -f6)
-    # echo "DEBUG RULE_DPORT = [$RULE_DPORT]" >&2
-
     RULE_IFACE=$(echo "$line" | cut -d'|' -f7)
-    # echo "DEBUG RULE_IFACE = [$RULE_IFACE]" >&2
-
     RULE_PERSIST=$(echo "$line" | cut -d'|' -f8)
-    # echo "DEBUG RULE_PERSIST = [$RULE_PERSIST]" >&2
-
     RULE_COMMENT=$(echo "$line" | cut -d'|' -f9)
-    # echo "DEBUG RULE_COMMENT = [$RULE_COMMENT]" >&2
 }
 
 # ─── Validate all fields of a pending rule ────────────────────────────────────
@@ -205,13 +231,15 @@ rules_validate() {
         ui_error "Interface not found: $iface"
         ok=0
     }
-    # At least one criterion must be non-any
+    if [ -n "$comment" ] && ! nft_validate_comment "$comment"; then
+        ui_error "Invalid comment: contains forbidden characters"
+        ok=0
+    fi
     if [ "$proto" = "any" ] && [ "$src_ip" = "any" ] && [ "$dst_ip" = "any" ] && \
        [ "$src_port" = "any" ] && [ "$dst_port" = "any" ] && [ "$iface" = "any" ]; then
         ui_warn "Rule matches ALL connections - NSS will be disabled for everything"
         ui_warn "This may impact routing performance significantly"
-        # Permitir ANY a todo, venimos desde ct_clear_rule_marks(), que ahora permite lfush a todo ante un any all
-        # ok=0
     fi
+
     [ "$ok" -eq 1 ]
 }

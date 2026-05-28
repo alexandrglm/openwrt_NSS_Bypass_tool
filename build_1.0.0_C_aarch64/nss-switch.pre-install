@@ -12,11 +12,12 @@ log() {
 check_nss_platform() {
     if lsmod 2>/dev/null | grep -q "qca_nss_drv"; then
         # IS_NSS_PLATFORM=1
+        log "NSS Hardware detected =)"
     else
         # IS_NSS_PLATFORM=0
         log "⚠️  NSS hardware NOT detected"
         log "   This is normal on non-Qualcomm devices or when NSS is disabled in firmware"
-        log "   The tool will still work, but in SFE mode (Software Offload)"
+        log "   The tool will still work, but for, at least, SFE mode (Software Offload)"
     fi
 }
 
@@ -37,17 +38,17 @@ install_pkg_dependencies() {
 log "Checking dependencies..."
 
 # Verificar si conntrackd está instalado
-if ! command -v conntrackd >/dev/null 2>&1; then
-    log "Installing conntrackd..."
-    output=$(install_pkg_dependencies conntrackd)
-    if [ $? -ne 0 ]; then
-        log "ERROR: Failed to install conntrackd"
-        log "Reason: $output"
-        log "Please install manually: apk add conntrackd"
-        exit 1
-    fi
-    log "conntrackd installed successfully"
-fi
+# if ! command -v conntrackd >/dev/null 2>&1; then
+    # log "Installing conntrackd..."
+    # output=$(install_pkg_dependencies conntrackd)
+    # if [ $? -ne 0 ]; then
+        # log "ERROR: Failed to install conntrackd"
+        # log "Reason: $output"
+        # log "Please install manually: apk add conntrackd"
+        # exit 1
+    # fi
+    # log "conntrackd installed successfully"
+# fi
 
 # Verificar si conntrack está instalado (a veces viene con conntrackd, a veces no)
 if ! command -v conntrack >/dev/null 2>&1; then
