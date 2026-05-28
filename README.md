@@ -47,6 +47,7 @@ nss-switch watch 5
 | `nss-switch add [options]` | Manually add a bypass rule. |
 | `nss-switch list` | List all defined bypass rules. |
 | `nss-switch remove <id>` | Remove a bypass rule by ID. |
+| `nss-switch kill <id>|[--options]` | Kill active connections matching rule ID, or --flags. |
 | `nss-switch flush [--rules\|--all\|--temp]` | Remove rules from nftables. |
 | `nss-switch apply` | Re-apply `rules.conf` to nftables. |
 | `nss-switch status` | Show full status dashboard (ECM state, rules, conntrack). |
