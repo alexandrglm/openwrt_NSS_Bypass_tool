@@ -40,12 +40,10 @@ detect_has_dnat() {
 # ─── Get zone name for an interface from fw4 chains ──────────────────────────
 detect_zone_for_iface() {
     local iface="$1"
-    # fw4 names chains like input_lan, forward_lan, etc.
-    # Look for iifname matches in chain jumps
     nft list ruleset 2>/dev/null | \
         grep "iifname \"$iface\".*jump" | \
-        grep -oE 'jump [a-z_]+' | \
-        head -1 | awk '{print $2}' | sed 's/input_//;s/forward_//;s/output_//'
+        grep -oE 'jump [A-Za-z0-9_\.-]+' | \
+        head -1 | awk '{print $2}' | sed 's/^input_//;s/^forward_//;s/^output_//;s/^helper_//'
 }
 # ─── Get all interfaces that have DNAT rules ──────────────────────────────────
 detect_dnat_ifaces() {

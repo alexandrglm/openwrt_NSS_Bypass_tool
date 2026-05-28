@@ -490,13 +490,13 @@ cmd_remove() {
     line=$(rules_get "$id") || { ui_error "Rule $id not found"; return 1; }
     rules_parse "$line"
     ui_kv "ID"      "$RULE_ID"
-    ui_kv "Proto"   "$RULE_PROTO"
-    ui_kv "Src IP"  "$RULE_SRC_IP"
-    ui_kv "Dst IP"  "$RULE_DST_IP"
-    ui_kv "Sport"   "$RULE_SPORT"
-    ui_kv "Dport"   "$RULE_DPORT"
-    ui_kv "Iface"   "$RULE_IFACE"
-    ui_kv "Comment" "$RULE_COMMENT"
+    ui_kv "Proto"   "$KILL_PROTO"
+    ui_kv "Src IP"  "$KILL_SRC_IP"
+    ui_kv "Dst IP"  "$KILL_DST_IP"
+    ui_kv "Sport"   "$KILL_SPORT"
+    ui_kv "Dport"   "$KILL_DPORT"
+    ui_kv "Iface"   "$KILL_IFACE"
+    ui_kv "Comment" "$KILL_COMMENT"
 
     ui_confirm "Remove this rule?" || { ui_warn "Aborted"; return 0; }
 
@@ -504,8 +504,8 @@ cmd_remove() {
     nft_apply
 
     ui_info "Clearing conntrack entries for this rule..."
-    ct_clear_rule_marks "$RULE_PROTO" "$RULE_SRC_IP" "$RULE_DST_IP" \
-        "$RULE_SPORT" "$RULE_DPORT" "$RULE_IFACE"
+    ct_clear_rule_marks "$KILL_PROTO" "$KILL_SRC_IP" "$KILL_DST_IP" \
+        "$KILL_SPORT" "$KILL_DPORT" "$KILL_IFACE"
 
     ui_info "Defuncting ECM so NSS can re-accelerate..."
     ecm_defunct_all
@@ -555,6 +555,124 @@ cmd_flush() {
             return 1
             ;;
     esac
+}
+
+# ─── COMMAND: kill ───────────────────────────────────────────────────────────
+cmd_kill() {
+    local first_arg="$1"
+    local proto="any" src_ip="any" dst_ip="any"
+    local sport="any" dport="any" iface="any"
+
+    if echo "$first_arg" | grep -qE '^[0-9]+$'; then
+        local id="$first_arg"
+        shift
+        local line
+        line=$(rules_get "$id") || { ui_error "Rule $id not found"; return 1; }
+        rules_parse "$line"
+
+        proto="$RULE_PROTO"
+        src_ip="$RULE_SRC_IP"
+        dst_ip="$RULE_DST_IP"
+        sport="$RULE_SPORT"
+        dport="$RULE_DPORT"
+        iface="$RULE_IFACE"
+
+        ui_banner
+        ui_section "Force Kill Rule $id"
+    else
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --proto)      proto="$2";    shift 2 ;;
+                --src-ip)     src_ip="$2";   shift 2 ;;
+                --dst-ip)     dst_ip="$2";   shift 2 ;;
+                --src-port)   sport="$2";    shift 2 ;;
+                --dst-port)   dport="$2";    shift 2 ;;
+                --iface)      iface="$2";    shift 2 ;;
+                *)
+                    ui_error "Unknown option: $1"
+                    ui_info "Usage: nss-switch kill [rule-id] [--proto X] [--src-ip X] [--dst-ip X] [--src-port X] [--dst-port X] [--iface X]"
+                    return 1
+                    ;;
+            esac
+        done
+
+        ui_banner
+        ui_section "Force Kill Connections"
+    fi
+
+    ui_kv "Proto" "$proto"
+    ui_kv "Src IP" "$src_ip"
+    ui_kv "Dst IP" "$dst_ip"
+    ui_kv "Src Port" "$sport"
+    ui_kv "Dst Port" "$dport"
+    ui_kv "Iface" "$iface"
+    ui_sep
+
+    ui_warn "This will forcibly remove active connections matching these criteria"
+    ui_confirm "Proceed?" || return 0
+
+    local flushed=0
+
+    if [ "$dport" != "any" ]; then
+        conntrack -D -p udp --dport "$dport" 2>/dev/null && flushed=1
+        conntrack -D -p tcp --dport "$dport" 2>/dev/null && flushed=1
+    fi
+
+    if [ "$sport" != "any" ]; then
+        conntrack -D -p udp --sport "$sport" 2>/dev/null && flushed=1
+        conntrack -D -p tcp --sport "$sport" 2>/dev/null && flushed=1
+    fi
+
+    if [ "$dst_ip" != "any" ]; then
+        conntrack -D -d "$dst_ip" 2>/dev/null && flushed=1
+    fi
+
+    if [ "$src_ip" != "any" ]; then
+        conntrack -D -s "$src_ip" 2>/dev/null && flushed=1
+    fi
+
+    if [ "$iface" != "any" ]; then
+        local real_iface="$iface"
+        local is_output=0
+
+        case "$iface" in
+            out:*|local:*)
+                is_output=1
+                real_iface="${iface#*:}"
+                ;;
+        esac
+
+        local iface_net=""
+
+        if [ $is_output -eq 1 ]; then
+            iface_net=$(ip addr show "$real_iface" 2>/dev/null | grep -oE 'inet [0-9.]+/[0-9]+' | head -1 | cut -d' ' -f2)
+        else
+            iface_net=$(ip route show dev "$real_iface" 2>/dev/null | grep -v default | head -1 | awk '{print $1}')
+        fi
+
+        if [ -n "$iface_net" ]; then
+            local iface_ip="${iface_net%%/*}"
+            ui_info "Flushing connections for interface $real_iface (network: $iface_net)"
+            conntrack -D -s "$iface_ip" 2>/dev/null && flushed=1
+            conntrack -D -d "$iface_ip" 2>/dev/null && flushed=1
+        else
+            ui_warn "Could not determine IP/net for interface $real_iface"
+        fi
+    fi
+
+    ecm_defunct_all
+
+    if [ $flushed -eq 1 ]; then
+        ui_ok "Connections forcibly flushed"
+    else
+        ui_info "No active connections found matching criteria"
+    fi
+
+    if echo "$id" | grep -qE '^[0-9]+$'; then
+        rules_remove "$id"
+        nft_apply
+        ui_ok "Rule $id removed and firewall reloaded"
+    fi
 }
 
 # ─── COMMAND: apply ───────────────────────────────────────────────────────────
@@ -755,6 +873,7 @@ cmd_help() {
     _help_cmd "add [options]"                    "Manually add a bypass rule"
     _help_cmd "list"                             "List all defined bypass rules"
     _help_cmd "remove <id>"                      "Remove a bypass rule by ID"
+    _help_cmd "kill <id|--options>"              "Kill active connections matching rule ID, or --flags"
     _help_cmd "flush [--rules|--all|--temp]"     "Remove rules from nftables"
     _help_cmd "apply"                            "Re-apply rules.conf to nftables"
     _help_cmd "status"                           "Full status dashboard"
@@ -800,17 +919,18 @@ COMMAND="${1:-help}"
 shift 2>/dev/null || true
 
 case "$COMMAND" in
-    watch)           cmd_watch "$@"   ;;
-    pick)            cmd_pick  "$@"   ;;
-    add)             cmd_add   "$@"   ;;
-    list)            cmd_list  "$@"   ;;
-    remove|rm)       cmd_remove "$@"  ;;
-    flush)           cmd_flush "$@"   ;;
-    apply)           cmd_apply "$@"   ;;
-    status)          cmd_status "$@"  ;;
-    config)          cmd_config "$@"  ;;
-    debug)           cmd_debug "$@"   ;;
-    help|-h|--help)  cmd_help         ;;
+    watch)              cmd_watch "$@"  ;;
+    pick)               cmd_pick  "$@"  ;;
+    add)                cmd_add   "$@"  ;;
+    list)               cmd_list  "$@"  ;;
+    remove|rm)          cmd_remove "$@" ;;
+    flush)              cmd_flush "$@"  ;;
+    kill)               cmd_kill "$@"   ;;
+    apply)              cmd_apply "$@"  ;;
+    status)             cmd_status "$@" ;;
+    config)             cmd_config "$@" ;;
+    debug)              cmd_debug "$@"  ;;
+    help|-h|--help)     cmd_help        ;;
     *)
         ui_error "Unknown command: $COMMAND"
         cmd_help

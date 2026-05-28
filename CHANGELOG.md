@@ -1,5 +1,16 @@
 #  Changelog
 
+## 28 May 2026:
+
+* feat(kill): Added nss-switch kill command to forcibly flush conntrack entries matching a rule ID or custom criteria (--proto, --src-ip, --dst-ip, --src-port, --dst-port, --iface). Removes the rule automatically when ID is given.
+
+* feat(nft): Added mangle_output hook to apply bypass rules to locally generated traffic (router-originated DNS, NTP, WireGuard, etc...).
+
+* fix(interface display): Improved `nss-ct-dump` to show real output interface (pppoe-wan, etc.) instead of lo for router-originated traffic by checking local IPs and using dst_ip for route lookup.
+
+* fix(conntrack flush): Enhanced interface handling in kill command to derive IP/subnet from interface name for both input (iifname) and output (oifname/local:) cases.
+
+
 ## 27 May 2026:
 
 ### OpenWrt PR Review Fixes Part 1
