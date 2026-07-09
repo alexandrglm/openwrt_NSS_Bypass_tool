@@ -53,9 +53,9 @@ jobs:
       - name: Create bin directory and copy binary
         run: |
           cd build_1.0.0_C_aarch64
-          mkdir -p source/usr/bin/NSS-Switch/bin
-          cp nss-ct-dump/nss-ct-dump_aarch64 source/usr/bin/NSS-Switch/bin/
-          ls -la source/usr/bin/NSS-Switch/bin/
+          mkdir -p source/usr/lib/nss-switch/bin
+          cp nss-ct-dump/nss-ct-dump_aarch64 source/usr/lib/nss-switch/bin/nss-ct-dump
+          ls -la source/usr/lib/nss-switch/bin/
 
       - name: Setup APK build environment
         run: apk add --no-cache alpine-sdk abuild
