@@ -9,9 +9,16 @@
 #include <ctype.h>
 
 #define CONNTRACK_FILE "/proc/net/nf_conntrack"
-#define NSS_MARK 0x00010000
+
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
+/* #define NSS_MARK 0x00010000 */
 #define MAX_LINE 2048
 #define CACHE_SIZE 256
+
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
+static unsigned int NSS_MARK_GLOBAL = 0x00010000;
+
+
 
 /* Cache para IP -> interfaz */
 typedef struct {
@@ -23,14 +30,45 @@ typedef struct {
 static iface_cache_t cache[CACHE_SIZE];
 static int cache_idx = 0;
 
+/* DEBUG: Cache para estado  */
+static int cached_nss_available = -1;
+static int cached_sfe_available = -1;
+
 /* headers */
 void compress_ipv6(char *dest, const char *src);
 char* get_iface_for_ip(const char *ip);
 int is_bypassed(unsigned int mark);
 const char* get_nss_state(unsigned int mark);
-unsigned int parse_mark(const char *line);
 void parse_conntrack_line(const char *line, char *proto, char *src_ip, unsigned int *src_port, char *dst_ip, unsigned int *dst_port, unsigned int *mark, char *state);
-int is_router_local(const char *ip);
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
+unsigned int get_nss_mark_from_uci(void);
+/* unsigned int get_nss_mark_mask_from_uci(void); */
+/* unsigned int parse_mark(const char *line); */
+/* int is_router_local(const char *ip); */
+
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
+/* Get NSS_MARK FROM UCI */
+unsigned int get_nss_mark_from_uci(void) {
+    FILE *fp;
+    char line[256];
+    unsigned int mark = 0x00010000;
+
+    fp = popen("uci -q get nss-switch.settings.nss_mark 2>/dev/null", "r");
+    if (fp) {
+        if (fgets(line, sizeof(line), fp) != NULL) {
+            line[strcspn(line, "\n")] = '\0';
+            if (strncmp(line, "0x", 2) == 0) {
+                mark = strtoul(line, NULL, 16);
+            } else {
+                mark = strtoul(line, NULL, 0);
+            }
+        }
+        pclose(fp);
+    }
+
+    return mark;
+}
+
 
 
 /* Compress IPv6 */
@@ -74,8 +112,7 @@ void compress_ipv6(char *dest, const char *src) {
     if (max_len > 1) {
         for (i = 0; i < group_count; i++) {
             if (i == max_start) {
-                if (i == 0) strcat(result, ":");
-                strcat(result, ":");
+                strcat(result, "::");
                 compressed = 1;
                 i += max_len - 1;
             } else {
@@ -117,6 +154,10 @@ char* get_iface_for_ip(const char *ip) {
         snprintf(cmd, sizeof(cmd), "ip route get %s 2>/dev/null | grep -oE 'dev [^ ]+' | cut -d' ' -f2", ip);
     }
 
+    /* DEBUG PR-1: resetea valor SIEMPRE antes ed uso */
+    strcpy(iface, "?");
+
+
     fp = popen(cmd, "r");
     if (fp) {
         if (fgets(iface, sizeof(iface), fp) != NULL) {
@@ -126,28 +167,8 @@ char* get_iface_for_ip(const char *ip) {
     }
 
     if (strlen(iface) == 0 || strcmp(iface, "lo") == 0) {
-        /* IP local del router para los problemas lo */
-        if (strchr(ip, ':') != NULL) {
-            snprintf(cmd, sizeof(cmd), "ip -6 addr show 2>/dev/null | grep -B1 'inet6 %s' | head -1 | awk '{print $2}' | sed 's/://'", ip);
-        } else {
-            snprintf(cmd, sizeof(cmd), "ip addr show 2>/dev/null | grep -B1 'inet %s' | head -1 | awk '{print $2}' | sed 's/://'", ip);
-        }
-
-        fp = popen(cmd, "r");
-        if (fp) {
-            char local_iface[32] = "";
-            if (fgets(local_iface, sizeof(local_iface), fp) != NULL) {
-                local_iface[strcspn(local_iface, "\n")] = '\0';
-                if (strlen(local_iface) > 0) {
-                    snprintf(iface, sizeof(iface), "local:%s", local_iface);
-                } else {
-                    strcpy(iface, "?");
-                }
-            }
-            pclose(fp);
-        } else {
-            strcpy(iface, "?");
-        }
+        /* Es tráfico hacia/desde el propio router */
+        strcpy(iface, "lo");
     }
 
     if (strlen(iface) == 0) {
@@ -167,21 +188,28 @@ char* get_iface_for_ip(const char *ip) {
 
 
 /* Verifica bypass por mark */
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
 int is_bypassed(unsigned int mark) {
-    return (mark & NSS_MARK) != 0;
+    return (mark & NSS_MARK_GLOBAL) != 0;
 }
 
-/* Obtener offload (HW/SFE/CPU) */
+/* Obtener offload (HW/SFE/CPU) - con cache para evitar multiples access() */
 const char* get_nss_state(unsigned int mark) {
     if (is_bypassed(mark)) {
         return "CPU";
     }
 
-    if (access("/sys/kernel/debug/ecm/ecm_nss_ipv4", F_OK) == 0) {
+    /* DEBUG: Inicializar cache si es primera vez */
+    if (cached_nss_available == -1) {
+        cached_nss_available = (access("/sys/kernel/debug/ecm/ecm_nss_ipv4", F_OK) == 0);
+        cached_sfe_available = (access("/sys/kernel/debug/ecm/ecm_sfe_ipv4", F_OK) == 0);
+    }
+
+    if (cached_nss_available) {
         return "HW";
     }
 
-    if (access("/sys/kernel/debug/ecm/ecm_sfe_ipv4", F_OK) == 0) {
+    if (cached_sfe_available) {
         return "SFE";
     }
 
@@ -260,19 +288,71 @@ void parse_conntrack_line(const char *line, char *proto, char *src_ip, unsigned 
 }
 
 
-/* Normalizar nombre de interfaz para mostrar */
-const char* normalize_iface(const char *iface) {
-    if (strcmp(iface, "pppoe-wan") == 0) return "wan";
-    if (strcmp(iface, "br-lan") == 0) return "lan";
-    if (strncmp(iface, "local:", 6) == 0) return iface;
-    return iface;
+/* Normalizar protocolo: convierte número a nombre (si se conoce) */
+void normalize_proto(char *proto) {
+    if (strcmp(proto, "0") == 0) strcpy(proto, "hopopt");
+    else if (strcmp(proto, "1") == 0) strcpy(proto, "icmp");
+    else if (strcmp(proto, "2") == 0) strcpy(proto, "igmp");
+    else if (strcmp(proto, "3") == 0) strcpy(proto, "ggp");
+    else if (strcmp(proto, "4") == 0) strcpy(proto, "ipencap");
+    else if (strcmp(proto, "5") == 0) strcpy(proto, "st");
+    else if (strcmp(proto, "6") == 0) strcpy(proto, "tcp");
+    else if (strcmp(proto, "8") == 0) strcpy(proto, "egp");
+    else if (strcmp(proto, "9") == 0) strcpy(proto, "igp");
+    else if (strcmp(proto, "12") == 0) strcpy(proto, "pup");
+    else if (strcmp(proto, "17") == 0) strcpy(proto, "udp");
+    else if (strcmp(proto, "20") == 0) strcpy(proto, "hmp");
+    else if (strcmp(proto, "22") == 0) strcpy(proto, "xns-idp");
+    else if (strcmp(proto, "27") == 0) strcpy(proto, "rdp");
+    else if (strcmp(proto, "29") == 0) strcpy(proto, "iso-tp4");
+    else if (strcmp(proto, "33") == 0) strcpy(proto, "dccp");
+    else if (strcmp(proto, "36") == 0) strcpy(proto, "xtp");
+    else if (strcmp(proto, "37") == 0) strcpy(proto, "ddp");
+    else if (strcmp(proto, "38") == 0) strcpy(proto, "idpr-cmtp");
+    else if (strcmp(proto, "41") == 0) strcpy(proto, "ipv6");
+    else if (strcmp(proto, "43") == 0) strcpy(proto, "ipv6-route");
+    else if (strcmp(proto, "44") == 0) strcpy(proto, "ipv6-frag");
+    else if (strcmp(proto, "45") == 0) strcpy(proto, "idrp");
+    else if (strcmp(proto, "46") == 0) strcpy(proto, "rsvp");
+    else if (strcmp(proto, "47") == 0) strcpy(proto, "gre");
+    else if (strcmp(proto, "50") == 0) strcpy(proto, "esp");
+    else if (strcmp(proto, "51") == 0) strcpy(proto, "ah");
+    else if (strcmp(proto, "57") == 0) strcpy(proto, "skip");
+    else if (strcmp(proto, "58") == 0) strcpy(proto, "ipv6-icmp");
+    else if (strcmp(proto, "59") == 0) strcpy(proto, "ipv6-nonxt");
+    else if (strcmp(proto, "60") == 0) strcpy(proto, "ipv6-opts");
+    else if (strcmp(proto, "73") == 0) strcpy(proto, "rspf");
+    else if (strcmp(proto, "81") == 0) strcpy(proto, "vmtp");
+    else if (strcmp(proto, "88") == 0) strcpy(proto, "eigrp");
+    else if (strcmp(proto, "89") == 0) strcpy(proto, "ospf");
+    else if (strcmp(proto, "93") == 0) strcpy(proto, "ax.25");
+    else if (strcmp(proto, "94") == 0) strcpy(proto, "ipip");
+    else if (strcmp(proto, "97") == 0) strcpy(proto, "etherip");
+    else if (strcmp(proto, "98") == 0) strcpy(proto, "encap");
+    else if (strcmp(proto, "103") == 0) strcpy(proto, "pim");
+    else if (strcmp(proto, "108") == 0) strcpy(proto, "ipcomp");
+    else if (strcmp(proto, "112") == 0) strcpy(proto, "vrrp");
+    else if (strcmp(proto, "115") == 0) strcpy(proto, "l2tp");
+    else if (strcmp(proto, "124") == 0) strcpy(proto, "isis");
+    else if (strcmp(proto, "132") == 0) strcpy(proto, "sctp");
+    else if (strcmp(proto, "133") == 0) strcpy(proto, "fc");
+    /* Si no está en la lista, mantener el número */
+
+    /* DEBUG (no PR) */
+    /* En el futuro, lo ideas sería basarnos en /etc/protocols ... */
 }
+
+
+
+
+
+
 
 /* MAIN */
 int main(int argc, char *argv[]) {
     FILE *fp;
     char line[MAX_LINE];
-    char proto[8];
+    char proto[16];
     char src_ip[64], dst_ip[64];
     unsigned int src_port, dst_port;
     unsigned int mark;
@@ -280,6 +360,10 @@ int main(int argc, char *argv[]) {
     int num = 0;
     char src_comp[64], dst_comp[64];
     char src_display[128], dst_display[128];
+
+
+    /* DEBUG PR-1 NO hardcoded values, uci get instead */
+    NSS_MARK_GLOBAL = get_nss_mark_from_uci();
 
     fp = fopen(CONNTRACK_FILE, "r");
     if (!fp) {
@@ -298,8 +382,7 @@ int main(int argc, char *argv[]) {
         num++;
 
         /* Obtener interfaz */
-        char *iface_raw = get_iface_for_ip(src_ip);
-        const char *iface = normalize_iface(iface_raw);
+        char *iface = get_iface_for_ip(src_ip);
 
         /* Estado NSS y bypass */
         const char *nss_state = get_nss_state(mark);
@@ -320,12 +403,10 @@ int main(int argc, char *argv[]) {
             snprintf(dst_display, sizeof(dst_display), "%s#%u", dst_ip, dst_port);
         }
 
-        /* Normalizar protocolo, con el arrastre que traemos desde shell */
-        if (strcmp(proto, "6") == 0) strcpy(proto, "tcp");
-        else if (strcmp(proto, "17") == 0) strcpy(proto, "udp");
-        else if (strcmp(proto, "1") == 0) strcpy(proto, "icmp");
+        /* Normalizar protocolo para mostrar (UI) y para reglas */
+        normalize_proto(proto);
 
-        /* Output con el m ismo formato pipes que shell */
+        /* Output con el mismo formato pipes que shell */
         printf("%d|%s|%s|%s|%s|%s|%s|%u|%s\n", num, proto, src_display, dst_display, iface, nss_state, bypass, mark, state);
     }
 

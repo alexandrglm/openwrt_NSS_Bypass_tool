@@ -337,6 +337,8 @@ cmd_debug_monitor() {
     done
 
 }
+
+# DEBUG PR-1
 cmd_debug_log() {
     local log_exists=0
     if [ -f "$DEBUG_LOG" ]; then
@@ -352,29 +354,30 @@ cmd_debug_log() {
             printf "  ${C_DIM}%s${C_RESET}\n" "$line"
         done
         echo ""
-        if ui_ask_yn "Show full debug log?" n; then
+        if ui_ask_yn "Show full debug log? " n; then
             cat "$DEBUG_LOG"
             echo ""
         fi
-        if ui_ask_yn "Disable debug logging? (log will be deleted)" n; then
+        if ui_ask_yn "Disable debug logging? (log will be deleted) " n; then
             rm -f "$DEBUG_LOG"
-            if grep -q "^DEBUG_MODE=" "$CONFIG_FILE"; then
-                sed -i "s/^DEBUG_MODE=.*/DEBUG_MODE=no/" "$CONFIG_FILE"
-            fi
+
+            # DEBUG PR-1: Usar UCI para desactivar debug
+            uci set nss-switch.settings.debug_mode="no"
+            uci commit nss-switch
+
             ui_ok "Debug logging disabled, log file deleted"
         fi
     else
         ui_info "Debug logging is currently disabled"
         echo ""
         if ui_ask_yn "Enable debug logging?" y; then
-            # Crear log con timestamp inicial
             echo "=== NSS-Switch Debug Log ===" > "$DEBUG_LOG"
             echo "=== Started: $(date) ===" >> "$DEBUG_LOG"
-            if grep -q "^DEBUG_MODE=" "$CONFIG_FILE"; then
-                sed -i "s/^DEBUG_MODE=.*/DEBUG_MODE=yes/" "$CONFIG_FILE"
-            else
-                echo "DEBUG_MODE=yes" >> "$CONFIG_FILE"
-            fi
+
+            # DEBUG PR-1: Usar UCI para activar debug
+            uci set nss-switch.settings.debug_mode="yes"
+            uci commit nss-switch
+
             ui_ok "Debug logging enabled at $DEBUG_LOG"
             ui_info "Use 'nss-switch debug log' again to disable"
         fi

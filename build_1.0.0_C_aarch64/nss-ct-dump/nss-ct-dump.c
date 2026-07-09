@@ -9,33 +9,66 @@
 #include <ctype.h>
 
 #define CONNTRACK_FILE "/proc/net/nf_conntrack"
-#define NSS_MARK 0x00010000
+
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
+/* #define NSS_MARK 0x00010000 */
 #define MAX_LINE 2048
 #define CACHE_SIZE 256
 
-/* Cache todo */
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
+static unsigned int NSS_MARK_GLOBAL = 0x00010000;
+
+
+
+/* Cache para IP -> interfaz */
 typedef struct {
     char ip[64];
     char iface[32];
     int valid;
 } iface_cache_t;
+
 static iface_cache_t cache[CACHE_SIZE];
 static int cache_idx = 0;
-static char local_ips[64][64];
-static int local_ips_count = 0;
-static int local_ips_loaded = 0;
+
+/* DEBUG: Cache para estado  */
 static int cached_nss_available = -1;
 static int cached_sfe_available = -1;
 
 /* headers */
 void compress_ipv6(char *dest, const char *src);
-char* get_iface_for_flow(const char *src_ip, const char *dst_ip);
+char* get_iface_for_ip(const char *ip);
 int is_bypassed(unsigned int mark);
 const char* get_nss_state(unsigned int mark);
 void parse_conntrack_line(const char *line, char *proto, char *src_ip, unsigned int *src_port, char *dst_ip, unsigned int *dst_port, unsigned int *mark, char *state);
-void load_local_ips(void);
-int is_local_ip(const char *ip);
-void normalize_proto(char *proto);
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
+unsigned int get_nss_mark_from_uci(void);
+/* unsigned int get_nss_mark_mask_from_uci(void); */
+/* unsigned int parse_mark(const char *line); */
+/* int is_router_local(const char *ip); */
+
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
+/* Get NSS_MARK FROM UCI */
+unsigned int get_nss_mark_from_uci(void) {
+    FILE *fp;
+    char line[256];
+    unsigned int mark = 0x00010000;
+
+    fp = popen("uci -q get nss-switch.settings.nss_mark 2>/dev/null", "r");
+    if (fp) {
+        if (fgets(line, sizeof(line), fp) != NULL) {
+            line[strcspn(line, "\n")] = '\0';
+            if (strncmp(line, "0x", 2) == 0) {
+                mark = strtoul(line, NULL, 16);
+            } else {
+                mark = strtoul(line, NULL, 0);
+            }
+        }
+        pclose(fp);
+    }
+
+    return mark;
+}
+
 
 
 /* Compress IPv6 */
@@ -79,8 +112,7 @@ void compress_ipv6(char *dest, const char *src) {
     if (max_len > 1) {
         for (i = 0; i < group_count; i++) {
             if (i == max_start) {
-                if (i == 0) strcat(result, ":");
-                strcat(result, ":");
+                strcat(result, "::");
                 compressed = 1;
                 i += max_len - 1;
             } else {
@@ -99,83 +131,32 @@ void compress_ipv6(char *dest, const char *src) {
     strcpy(dest, result);
 }
 
+
 /* IP uiface< */
-/* 1,   Cargar IPs locales del router (IPv4 IPv6) */
-void load_local_ips(void) {
-    FILE *fp;
-    char ip[64];
-
-    if (local_ips_loaded) return;
-
-    /* Cargar IPv4 */
-    fp = popen("ip addr show 2>/dev/null | grep -oE 'inet ([0-9]+\\.){3}[0-9]+' | awk '{print $2}'", "r");
-    if (fp) {
-        while (fgets(ip, sizeof(ip), fp)) {
-            ip[strcspn(ip, "\n")] = '\0';
-            if (strlen(ip) > 0 && local_ips_count < 64) {
-                strcpy(local_ips[local_ips_count++], ip);
-            }
-        }
-        pclose(fp);
-    }
-
-    /* Cargar IPv6 */
-    fp = popen("ip -6 addr show 2>/dev/null | awk '/inet6/ {print $2}' | cut -d'/' -f1", "r");
-    if (fp) {
-        while (fgets(ip, sizeof(ip), fp)) {
-            ip[strcspn(ip, "\n")] = '\0';
-            if (strlen(ip) > 0 && local_ips_count < 64) {
-                strcpy(local_ips[local_ips_count++], ip);
-            }
-        }
-        pclose(fp);
-    }
-
-    local_ips_loaded = 1;
-}
-
-/* Verificar si una IP es local al router */
-int is_local_ip(const char *ip) {
-    int i;
-    load_local_ips();
-    for (i = 0; i < local_ips_count; i++) {
-        if (strcmp(local_ips[i], ip) == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/* Obtener interfaz para un flujo (src_ip, dst_ip) */
-char* get_iface_for_flow(const char *src_ip, const char *dst_ip) {
+char* get_iface_for_ip(const char *ip) {
     static char iface[32] = "?";
     char cmd[256];
     FILE *fp;
     int i;
-    char lookup_ip[64];
 
-    /* Buscar en cache por src_ip */
+    /* Buscar en cache */
     for (i = 0; i < cache_idx; i++) {
-        if (strcmp(cache[i].ip, src_ip) == 0 && cache[i].valid) {
+        if (strcmp(cache[i].ip, ip) == 0 && cache[i].valid) {
             return cache[i].iface;
         }
     }
 
-    /* Determinar qué IP usar para route lookup */
-    if (is_local_ip(src_ip) && dst_ip != NULL && strlen(dst_ip) > 0 && strcmp(dst_ip, "?") != 0) {
-        /* Tráfico originado por el router: usar dst_ip para obtener interfaz de salida */
-        strcpy(lookup_ip, dst_ip);
+    /* Si es IPv6, formato especial */
+    if (strchr(ip, ':') != NULL) {
+        snprintf(cmd, sizeof(cmd), "ip -6 route get %s 2>/dev/null | grep -oE 'dev [^ ]+' | cut -d' ' -f2", ip);
+        /* Y si no, es IPv4 */
     } else {
-        /* Tráfico normal: usar src_ip */
-        strcpy(lookup_ip, src_ip);
+        snprintf(cmd, sizeof(cmd), "ip route get %s 2>/dev/null | grep -oE 'dev [^ ]+' | cut -d' ' -f2", ip);
     }
 
-    /* Obtener interfaz */
-    if (strchr(lookup_ip, ':') != NULL) {
-        snprintf(cmd, sizeof(cmd), "ip -6 route get %s 2>/dev/null | grep -oE 'dev [^ ]+' | cut -d' ' -f2", lookup_ip);
-    } else {
-        snprintf(cmd, sizeof(cmd), "ip route get %s 2>/dev/null | grep -oE 'dev [^ ]+' | cut -d' ' -f2", lookup_ip);
-    }
+    /* DEBUG PR-1: resetea valor SIEMPRE antes ed uso */
+    strcpy(iface, "?");
+
 
     fp = popen(cmd, "r");
     if (fp) {
@@ -185,14 +166,18 @@ char* get_iface_for_flow(const char *src_ip, const char *dst_ip) {
         pclose(fp);
     }
 
+    if (strlen(iface) == 0 || strcmp(iface, "lo") == 0) {
+        /* Es tráfico hacia/desde el propio router */
+        strcpy(iface, "lo");
+    }
+
     if (strlen(iface) == 0) {
         strcpy(iface, "?");
     }
 
     /* Guardar en cache para velocidad en las proximas, tal como en modo shell */
-    /* ... usando src_ip como clave */
     if (cache_idx < CACHE_SIZE) {
-        strcpy(cache[cache_idx].ip, src_ip);
+        strcpy(cache[cache_idx].ip, ip);
         strcpy(cache[cache_idx].iface, iface);
         cache[cache_idx].valid = 1;
         cache_idx++;
@@ -203,17 +188,18 @@ char* get_iface_for_flow(const char *src_ip, const char *dst_ip) {
 
 
 /* Verifica bypass por mark */
+/* DEBUG PR-1 NO hardcoded values, uci get instead */
 int is_bypassed(unsigned int mark) {
-    return (mark & NSS_MARK) != 0;
+    return (mark & NSS_MARK_GLOBAL) != 0;
 }
 
-/* Obtener offload (HW/SFE/CPU) con cache para evitar multiples access() */
+/* Obtener offload (HW/SFE/CPU) - con cache para evitar multiples access() */
 const char* get_nss_state(unsigned int mark) {
     if (is_bypassed(mark)) {
         return "CPU";
     }
 
-    /*  DEBUG: Inicializar cache si es primera vez */
+    /* DEBUG: Inicializar cache si es primera vez */
     if (cached_nss_available == -1) {
         cached_nss_available = (access("/sys/kernel/debug/ecm/ecm_nss_ipv4", F_OK) == 0);
         cached_sfe_available = (access("/sys/kernel/debug/ecm/ecm_sfe_ipv4", F_OK) == 0);
@@ -252,8 +238,8 @@ void parse_conntrack_line(const char *line, char *proto, char *src_ip, unsigned 
     token = strtok(temp_line, " ");
     while (token && field_idx < 4) {
         if (field_idx == 2) {
-            strncpy(proto, token, 15);
-            proto[15] = '\0';
+            strncpy(proto, token, 7);
+            proto[7] = '\0';
         }
         field_idx++;
         token = strtok(NULL, " ");
@@ -290,8 +276,9 @@ void parse_conntrack_line(const char *line, char *proto, char *src_ip, unsigned 
     }
 
     /* Estado COMO EN SHELL: num de protocolo para TCP */
-    /* Ya no arrastra el problema de shell */
+    /* Esto es un error tremendo de interpretacion, que lo arrastramos desde shell, pero ...*/
     if (strcmp(proto, "tcp") == 0 || strcmp(proto, "6") == 0) {
+        /* La shell emite "6" para TCP, NO el estado real */
         strcpy(state, "6");
     } else if (strcmp(proto, "udp") == 0 || strcmp(proto, "17") == 0) {
         strcpy(state, "stateless");
@@ -350,7 +337,15 @@ void normalize_proto(char *proto) {
     else if (strcmp(proto, "132") == 0) strcpy(proto, "sctp");
     else if (strcmp(proto, "133") == 0) strcpy(proto, "fc");
     /* Si no está en la lista, mantener el número */
+
+    /* DEBUG (no PR) */
+    /* En el futuro, lo ideas sería basarnos en /etc/protocols ... */
 }
+
+
+
+
+
 
 
 /* MAIN */
@@ -366,14 +361,15 @@ int main(int argc, char *argv[]) {
     char src_comp[64], dst_comp[64];
     char src_display[128], dst_display[128];
 
+
+    /* DEBUG PR-1 NO hardcoded values, uci get instead */
+    NSS_MARK_GLOBAL = get_nss_mark_from_uci();
+
     fp = fopen(CONNTRACK_FILE, "r");
     if (!fp) {
         fprintf(stderr, "ERROR: Cannot open %s\n", CONNTRACK_FILE);
         return 1;
     }
-
-    /* Cargar IPs locales al inicio */
-    load_local_ips();
 
     while (fgets(line, sizeof(line), fp)) {
         parse_conntrack_line(line, proto, src_ip, &src_port, dst_ip, &dst_port, &mark, state);
@@ -385,8 +381,8 @@ int main(int argc, char *argv[]) {
 
         num++;
 
-        /* Obtener interfaz usando src_ip y dst_ip */
-        char *iface = get_iface_for_flow(src_ip, dst_ip);
+        /* Obtener interfaz */
+        char *iface = get_iface_for_ip(src_ip);
 
         /* Estado NSS y bypass */
         const char *nss_state = get_nss_state(mark);

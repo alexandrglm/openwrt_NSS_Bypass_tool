@@ -194,7 +194,7 @@ ui_banner() {
     printf "${FG_ACCENT}"
     printf '%s' "$BOX_TL"; _rep "$BOX_H" "$inner"; printf '%s\n' "$BOX_TR"
 
-    local l1="NSS-Switch  v1.0.0-r1 for aarch64" l2="Qualcomm NSS selective bypass"
+    local l1="NSS-Switch  v1.0" l2="Qualcomm NSS selective bypass"
     local p1=$(( (inner - ${#l1}) / 2 ))
     local p2=$(( (inner - ${#l2}) / 2 ))
 
@@ -236,9 +236,11 @@ ui_header_bar() {
     printf '%b%s %b\n' "$FG_BRIGHT" "$right" "$C_RESET"
 }
 
-# ─── Keybind hint bar - usa el ancho de la tabla ──────────────────────────────
+
+# DEBUG PR-1
+# ─── Keybind hint bar ──────────────────────────────
 ui_hint_bar() {
-    local hints="$*"
+    local hints="Ctrl+C / q exit • refresh every ${interval}s • Sorted by: ${sort_name} • 1-6: Sort column"
     local table_width
     table_width=$(ui_table_width)
 
@@ -249,6 +251,18 @@ ui_hint_bar() {
     printf "${C_RESET}${C_DIM}%b" "$(ui_clear_eol)"
     printf "\n"
 }
+# ui_hint_bar() {
+#     local hints="$*"
+#     local table_width
+#     table_width=$(ui_table_width)
+#
+#     printf "${BG_DARK}${FG_DIM} %s" "$hints"
+#     local used=$(( ${#hints} + 1 ))
+#     local pad=$(( table_width - used ))
+#     [ "$pad" -gt 0 ] && _rep ' ' "$pad"
+#     printf "${C_RESET}${C_DIM}%b" "$(ui_clear_eol)"
+#     printf "\n"
+# }
 
 # ─── Watch stats panel ────────────────────────────────────────────────────────
 ui_watch_stats_panel() {
@@ -297,11 +311,11 @@ ui_conn_header() {
     total_width=$(ui_table_width)
 
     printf "${BG_MED}${FG_DIM}"
-    printf " %-${UI_NUM_WIDTH}s %-${UI_PROTO_WIDTH}s %-${UI_SRC_WIDTH}s %-${UI_DST_WIDTH}s %-${UI_IFACE_WIDTH}s %-${UI_NSS_WIDTH}s %-${UI_BYPASS_WIDTH}s" \
-        "NUM" "PROTO" "SOURCE" "DESTINATION" "INTERFACE" "NSS" "BYPASS"
+
+    printf " %-5s %-7s %-42s %-42s %-17s %-5s %-6s" \
+        "NUM₁" "PROTO₂" "SOURCE₃" "DESTINATION₄" "INTERFACE₅" "NSS₆" "BYPASS"
     printf "${C_RESET}\n"
 
-    # Dibujar separador del mismo ancho
     printf "${FG_DIM}"
     _rep "$SLIM_H" "$total_width"
     printf "${C_RESET}\n"
@@ -320,7 +334,7 @@ _proto_to_service() {
             ;;
     esac
 
-    # Traducir por puerto
+    # Traducir por puerto, el el futuro podría usarse /etc/procotols
     case "$port" in
         22)   echo "SSH" ;;
         25)   echo "SMTP" ;;
@@ -396,8 +410,18 @@ ui_conn_row() {
     local iface="$5" nss="$6" bypass="$7"
 
     # Extraer puerto destino para la traducción
+    # Tal y como funciona nuestro parser NECESITAMOS partirlo en #, pero ante otros casos ... switch case
     local dst_port
-    dst_port=$(echo "$dst" | cut -d'#' -f2)
+    case "$dst" in
+        *'#'*)
+            dst_port="${dst##*#}" ;;
+        *']:'*)
+            dst_port="${dst##*]:}" ;;
+        *:*)
+            dst_port="${dst##*:}" ;;
+        *)
+            dst_port="" ;;
+    esac
 
     # Traducir protocolo a nombre de servicio (si aplica)
     local service_name
@@ -459,6 +483,9 @@ ui_rule_header() {
 }
 
 ui_rule_row() {
+
+    # echo "DEBUG: id='$1' proto='$2' src='$3' dst='$4'" >&2
+
     local id="$1" proto="$2" src="$3" dst="$4"
     local sport="$5" dport="$6" iface="$7" persist="$8" comment="$9"
 
@@ -467,15 +494,78 @@ ui_rule_row() {
     local row_bg=""
     [ $(( id % 2 )) -eq 0 ] && row_bg="$BG_MED"
 
-    printf '%b %b%-4s%b%b %b%-6s%b%b %-*s %-*s %-7s %-7s %-12s %b%-8s%b%b %b%s%b\n' \
+    # DEBUG
+    local src_fmt="%-${UI_SRC_WIDTH}s"
+    local dst_fmt="%-${UI_DST_WIDTH}s"
+
+    printf "%b %b%-4s%b%b %b%-6s%b%b ${src_fmt} ${dst_fmt} %-7s %-7s %-12s %b%-8s%b%b %b%s%b\n" \
         "$row_bg" \
         "$FG_ACCENT" "$C_BOLD" "$id" "$C_RESET" "$row_bg" \
         "$FG_YELLOW" "$proto" "$C_RESET" "$row_bg" \
-        "$UI_SRC_WIDTH" "$src" "$UI_DST_WIDTH" "$dst" \
+        "$src" "$dst" \
         "$sport" "$dport" "$iface" \
         "$pc" "$ps" "$C_RESET" "$row_bg" \
         "$C_DIM" "$comment" "$C_RESET"
 }
+
+# DEBUG
+# viene de rules.sh -> rules_list()  ... subyacente de ui_rule_row()
+# Si funciona bien, lo exportaremos a watch y pick
+ui_rule_row_dynamic() {
+    local rule_id="$1" proto="$2" src="$3" dst="$4"
+    local sport="$5" dport="$6" iface="$7" persist="$8" comment="$9"
+    local max_id="${10}" max_proto="${11}" max_src="${12}" max_dst="${13}"
+    local max_sport="${14}" max_dport="${15}" max_iface="${16}" max_persist="${17}"
+
+    # Configurar colores para persist
+    local pc="${C_MAGENTA}" ps="temp"
+    [ "$persist" = "yes" ] && pc="${FG_GREEN}${C_BOLD}" ps="persist"
+    local row_bg=""
+    [ $(( rule_id % 2 )) -eq 0 ] && row_bg="$BG_MED"
+
+    local id_fmt="%-${max_id}s"
+    local proto_fmt="%-${max_proto}s"
+    local src_fmt="%-${max_src}s"
+    local dst_fmt="%-${max_dst}s"
+    local sport_fmt="%-${max_sport}s"
+    local dport_fmt="%-${max_dport}s"
+    local iface_fmt="%-${max_iface}s"
+    local persist_fmt="%-${max_persist}s"
+
+    printf '%b' "$row_bg"
+
+    # ID con color amarillo bold
+    printf " ${FG_YELLOW}${C_BOLD}"
+    printf "${id_fmt}" "$rule_id"
+    printf "${C_RESET}"
+
+    # PROTO sin color
+    printf " ${proto_fmt}" "$proto"
+
+    # SRC sin color
+    printf " ${src_fmt}" "$src"
+
+    # DST sin color
+    printf " ${dst_fmt}" "$dst"
+
+    # SPORT sin color
+    printf " ${sport_fmt}" "$sport"
+
+    # DPORT sin color
+    printf " ${dport_fmt}" "$dport"
+
+    # IFACE sin color
+    printf " ${iface_fmt}" "$iface"
+
+    # PERSIST: temp en magenta dim, persist en green bold
+    printf " %b" "$pc"
+    printf "${persist_fmt}" "$ps"
+    printf "${C_RESET}"
+
+    # COMMENT con color gris
+    printf " %b%s%b\n" "$C_BLUE" "$comment" "$C_RESET"
+}
+
 
 # ─── Ctrl+C safe: write dump to tmpfile before rendering ─────────────────────
 # The core problem in ash pipes: `cmd | while read` puts 'while' in a subshell.
@@ -583,14 +673,43 @@ ui_pick_display_normal() {
 # ─── Ask yes/no ───────────────────────────────────────────────────────────────
 ui_ask_yn() {
     local question="$1" default="${2:-n}" hint ans
+    local valid=0
+
+    # Construir hint visual
     case "$default" in
         y|Y) hint="${C_BOLD}Y${C_RESET}/${C_DIM}n${C_RESET}" ;;
-        *)   hint="${C_DIM}y/${C_RESET}${C_BOLD}N${C_RESET}" ;;
+        n|N) hint="${C_DIM}y/${C_RESET}${C_BOLD}N${C_RESET}" ;;
+        *)   hint="y/n" ;;
     esac
-    printf "  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}%s${C_RESET} [%b]: " "$question" "$hint"
-    read -r ans
-    [ -z "$ans" ] && ans="$default"
-    case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+
+    while [ $valid -eq 0 ]; do
+        printf "  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}%s${C_RESET} [%b]: " "$question" "$hint"
+        read -r ans
+
+        # Permitir salir con q/Q
+        case "$ans" in
+            q|Q|quit|exit|cancel)
+                ui_warn "Operation cancelled by user"
+                exit 0
+                ;;
+        esac
+
+        # Si está vacío, usar default
+        [ -z "$ans" ] && ans="$default"
+
+        # Validar respuesta
+        case "$ans" in
+            y|Y|yes|YES|Yes)
+                return 0
+                ;;
+            n|N|no|NO|No)
+                return 1
+                ;;
+            *)
+                ui_error "Invalid answer: '$ans', please answer 'yes' or 'no' (or 'q' to cancel)"
+                ;;
+        esac
+    done
 }
 
 # ─── Ask with option list ─────────────────────────────────────────────────────
@@ -615,16 +734,58 @@ ui_ask_choice() {
     ui_error "Choice out of range"; UI_CHOICE=""; return 1
 }
 
+
+# DEBUG PR-1
 # ─── Ask free text ────────────────────────────────────────────────────────────
 ui_ask_input() {
-    local question="$1" default="$2"
-    if [ -n "$default" ]; then
+    local question="$1" default="$2" type="${3:-string}"
+    local input
+
+    while true; do
         printf "  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}%s${C_RESET} ${C_DIM}[%s]${C_RESET}: " "$question" "$default"
-    else
-        printf "  ${FG_ACCENT}${ARROW}${C_RESET} ${C_BOLD}%s${C_RESET}: " "$question"
-    fi
-    read -r UI_INPUT
-    [ -z "$UI_INPUT" ] && UI_INPUT="$default"
+        read -r input
+        [ -z "$input" ] && input="$default"
+
+        case "$type" in
+            port)
+                if [ "$input" = "any" ] || (echo "$input" | grep -qE '^[0-9]{1,5}$' && [ "$input" -ge 1 ] && [ "$input" -le 65535 ]); then
+                    UI_INPUT="$input"
+                    return 0
+                fi
+                ui_error "Invalid port: $input (must be 1-65535 or 'any')"
+                ;;
+            ip)
+                # Limpiar corchetes si existen
+                input=$(echo "$input" | sed 's/^\[//;s/\]$//')
+
+                # Si es IPv6 y tiene menos de 8 grupos y no tiene ::, añadir :: al final
+                if echo "$input" | grep -q ":" && ! echo "$input" | grep -q "::"; then
+                    local groups=$(echo "$input" | tr ':' '\n' | grep -c . 2>/dev/null)
+                    if [ -n "$groups" ] && [ "$groups" -lt 8 ]; then
+                        # Completar con :: al final
+                        input="${input}::"
+                    fi
+                fi
+
+                if [ "$input" = "any" ] || nft_validate_ip "$input"; then
+                    UI_INPUT="$input"
+                    return 0
+                fi
+                ui_error "Invalid IP/CIDR: $input"
+                ;;
+            proto)
+                if [ "$input" = "any" ] || nft_validate_proto "$input"; then
+                    UI_INPUT="$input"
+                    return 0
+                fi
+                ui_error "Invalid protocol: $input (tcp, udp, icmp, icmpv6, any)"
+                ;;
+            *)
+                UI_INPUT="$input"
+                return 0
+                ;;
+        esac
+    done
 }
 
 # ─── Ask numeric ──────────────────────────────────────────────────────────────
@@ -646,8 +807,8 @@ ui_ask_num() {
 # ─── Confirm ─────────────────────────────────────────────────────────────────
 ui_confirm() { ui_ask_yn "$1" "n"; }
 
+
 # ─── Spinner ──────────────────────────────────────────────────────────────────
-# ─── Spinner with color cycling ──────────────────────────────────────────────
 ui_spinner_start() {
     export _SPINNER_MSG="$1" _SPINNER_PID=""
     (

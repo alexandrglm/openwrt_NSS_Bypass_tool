@@ -178,7 +178,7 @@ Submitted for review and inclusion into official OpenWrt repositories, as it is 
 
 # License
 
-GPL-2.0-or-newer
+GPL-2.0
 
 ---
 

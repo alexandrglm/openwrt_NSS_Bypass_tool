@@ -2,7 +2,9 @@
 # NSS-Switch pre-removal script
 # Runs before APK removes files
 
-NSS_MARK=0x00010000
+NSS_MARK=$(uci -q get nss-switch.settings.nss_mark 2>/dev/null || echo "0x00010000")
+NFT_CHAIN_PRE=$(uci -q get nss-switch.settings.nft_chain_pre 2>/dev/null || echo "nss_bypass_pre")
+NFT_CHAIN_POST=$(uci -q get nss-switch.settings.nft_chain_post 2>/dev/null || echo "nss_bypass_post")
 INSTALL_DIR=/usr/lib/nss-switch
 FW_SCRIPT=/etc/firewall.d/nss-bypass-rules
 FW_CONF=/etc/config/firewall
@@ -17,16 +19,16 @@ log "Pre-removal starting..."
 # 1. Remove nftables rules (if nft available)
 if command -v nft >/dev/null 2>&1; then
     # Remove jumps from mangle chains
-    for chain in mangle_prerouting mangle_postrouting; do
-        handles=$(nft -a list chain inet fw4 "$chain" 2>/dev/null | grep -E "jump nss_bypass_pre|jump nss_bypass_post" | grep -oE 'handle [0-9]+' | awk '{print $2}')
+    for chain in mangle_prerouting mangle_postrouting mangle_output; do
+        handles=$(nft -a list chain inet fw4 "$chain" 2>/dev/null | grep -E "jump $NFT_CHAIN_PRE|jump $NFT_CHAIN_POST" | grep -oE 'handle [0-9]+' | awk '{print $2}')
         for h in $handles; do
             nft delete rule inet fw4 "$chain" handle "$h" 2>/dev/null
         done
     done
 
     # Delete our chains
-    nft delete chain inet fw4 nss_bypass_pre 2>/dev/null
-    nft delete chain inet fw4 nss_bypass_post 2>/dev/null
+    nft delete chain inet fw4 $NFT_CHAIN_PRE 2>/dev/null
+    nft delete chain inet fw4 $NFT_CHAIN_POST 2>/dev/null
 
     log "nftables rules removed"
 fi

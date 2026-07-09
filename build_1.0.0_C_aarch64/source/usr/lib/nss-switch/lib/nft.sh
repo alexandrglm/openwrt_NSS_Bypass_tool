@@ -1,6 +1,6 @@
 #!/usr/bin/env ash
 # lib/nft.sh — nftables chain/rule management for NSS-Switch
-# Works by editing /usr/bin/NSS-Switch/firewall.d/nss-bypass (nft file)
+# Works by editing /usr/bin/NSS-Switch/firewall.d/nss-bypass-rules (nft file)
 # and reloading via /etc/init.d/firewall restart
 # ASH compatible, BusyBox v1.37+
 
@@ -19,46 +19,42 @@ nft_chains_exist() {
     nft list chain inet fw4 "$NFT_CHAIN_POST" >/dev/null 2>&1
 }
 
-# ─── Generate the full nss-bypass nft script from rules.conf ──────────────────
+
+# DEBUG PR-1
+# ─── Generate the full nss-bypass-rules nft script from rules.conf ──────────────────
 nft_generate_script() {
     dbg "Generating $FW_SCRIPT from $RULES_FILE"
 
-    local c1 c2
-    c1='"NSS-Switch: save bypass mark to conntrack"'
-    c2='"NSS-Switch: restore bypass mark from conntrack"'
-
-    echo '#!/bin/ash'                                                                   > "$FW_SCRIPT"
-    echo '# NSS-Switch firewall.d hook — auto-generated, do not edit manually'       >> "$FW_SCRIPT"
-    echo "# Generated: $(date)"                                                       >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
-    echo "NSS_MARK=${NSS_MARK}"                                                       >> "$FW_SCRIPT"
-    echo "NFT_CHAIN_PRE=${NFT_CHAIN_PRE}"                                             >> "$FW_SCRIPT"
-    echo "NFT_CHAIN_POST=${NFT_CHAIN_POST}"                                           >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
-    echo 'nft_add_chains() {'                                                         >> "$FW_SCRIPT"
-    echo '    nft add chain inet fw4 ${NFT_CHAIN_PRE}  2>/dev/null || true'          >> "$FW_SCRIPT"
-    echo '    nft flush chain inet fw4 ${NFT_CHAIN_PRE} 2>/dev/null || true'         >> "$FW_SCRIPT"
-    echo '    nft add chain inet fw4 ${NFT_CHAIN_POST} 2>/dev/null || true'          >> "$FW_SCRIPT"
-    echo '    nft flush chain inet fw4 ${NFT_CHAIN_POST} 2>/dev/null || true'        >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
+    echo '#!/bin/ash' > "$FW_SCRIPT"
+    echo '# NSS-Switch firewall.d hook — auto-generated, do not edit manually' >> "$FW_SCRIPT"
+    echo "# Generated: $(date)" >> "$FW_SCRIPT"
+    echo '' >> "$FW_SCRIPT"
+    echo "NSS_MARK=${NSS_MARK}" >> "$FW_SCRIPT"
+    echo "NFT_CHAIN_PRE=${NFT_CHAIN_PRE}" >> "$FW_SCRIPT"
+    echo "NFT_CHAIN_POST=${NFT_CHAIN_POST}" >> "$FW_SCRIPT"
+    echo '' >> "$FW_SCRIPT"
+    # DEBUG PR-1
+    echo 'nft_add_chains() {' >> "$FW_SCRIPT"
+    echo '    nft add chain inet fw4 ${NFT_CHAIN_PRE}  2>/dev/null || true' >> "$FW_SCRIPT"
+    echo '    nft flush chain inet fw4 ${NFT_CHAIN_PRE} 2>/dev/null || true' >> "$FW_SCRIPT"
+    echo '    nft add chain inet fw4 ${NFT_CHAIN_POST} 2>/dev/null || true' >> "$FW_SCRIPT"
+    echo '    nft flush chain inet fw4 ${NFT_CHAIN_POST} 2>/dev/null || true' >> "$FW_SCRIPT"
+    echo '' >> "$FW_SCRIPT"
     echo '    handles=$(nft -a list chain inet fw4 mangle_prerouting 2>/dev/null | grep "jump ${NFT_CHAIN_PRE}" | grep -oE '"'"'handle [0-9]+'"'"' | awk '"'"'{print $2}'"'"')' >> "$FW_SCRIPT"
     echo '    for h in $handles; do nft delete rule inet fw4 mangle_prerouting handle "$h" 2>/dev/null; done' >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
+    echo '' >> "$FW_SCRIPT"
     echo '    handles=$(nft -a list chain inet fw4 mangle_postrouting 2>/dev/null | grep "jump ${NFT_CHAIN_POST}" | grep -oE '"'"'handle [0-9]+'"'"' | awk '"'"'{print $2}'"'"')' >> "$FW_SCRIPT"
     echo '    for h in $handles; do nft delete rule inet fw4 mangle_postrouting handle "$h" 2>/dev/null; done' >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
+    echo '' >> "$FW_SCRIPT"
     echo '    handles=$(nft -a list chain inet fw4 mangle_output 2>/dev/null | grep "jump ${NFT_CHAIN_PRE}" | grep -oE '"'"'handle [0-9]+'"'"' | awk '"'"'{print $2}'"'"')' >> "$FW_SCRIPT"
     echo '    for h in $handles; do nft delete rule inet fw4 mangle_output handle "$h" 2>/dev/null; done' >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
+    echo '' >> "$FW_SCRIPT"
     echo '    nft add rule inet fw4 mangle_prerouting  jump ${NFT_CHAIN_PRE}  comment "\"NSS-Switch prerouting\""'  >> "$FW_SCRIPT"
     echo '    nft add rule inet fw4 mangle_postrouting jump ${NFT_CHAIN_POST} comment "\"NSS-Switch postrouting\""' >> "$FW_SCRIPT"
-    echo '    nft add rule inet fw4 mangle_output      jump ${NFT_CHAIN_PRE}  comment "\"NSS-Switch output\""' >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
-    echo '    nft add rule inet fw4 ${NFT_CHAIN_POST} meta mark and ${NSS_MARK} != 0 ct mark set meta mark and ${NSS_MARK} comment \"NSS-Switch: save bypass mark to conntrack\"' >> "$FW_SCRIPT"
-    echo '    nft add rule inet fw4 ${NFT_CHAIN_PRE}  ct mark and ${NSS_MARK} != 0 meta mark set ct mark comment \"NSS-Switch: restore bypass mark from conntrack\"' >> "$FW_SCRIPT"
-    echo '}'                                                                           >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
-    echo 'nft_add_rules() {'                                                          >> "$FW_SCRIPT"
+    echo '    nft add rule inet fw4 mangle_output jump ${NFT_CHAIN_PRE} comment "\"NSS-Switch output\""' >> "$FW_SCRIPT"
+    echo '}' >> "$FW_SCRIPT"
+    echo '' >> "$FW_SCRIPT"
+    echo 'nft_add_rules() {' >> "$FW_SCRIPT"
 
     if [ -f "$RULES_FILE" ]; then
         while IFS='|' read -r id proto src_ip dst_ip src_port dst_port iface persist comment; do
@@ -69,23 +65,26 @@ nft_generate_script() {
         done < "$RULES_FILE"
     fi
 
-    echo '    true'                                                                    >> "$FW_SCRIPT"
-    echo '}'                                                                           >> "$FW_SCRIPT"
-    echo ''                                                                            >> "$FW_SCRIPT"
-    echo 'nft_add_chains'                                                             >> "$FW_SCRIPT"
-    echo 'nft_add_rules'                                                              >> "$FW_SCRIPT"
+    echo '    true' >> "$FW_SCRIPT"
+    echo '}' >> "$FW_SCRIPT"
+    echo '' >> "$FW_SCRIPT"
+    echo 'nft_add_chains' >> "$FW_SCRIPT"
+    echo 'nft_add_rules' >> "$FW_SCRIPT"
 
     chmod +x "$FW_SCRIPT"
     dbg "Script generated at $FW_SCRIPT"
 }
 
+
+
 # ─── Emit a single nft rule (used by nft_generate_script) ────────────────────
+# DEBUG PR-1
 _nft_emit_rule() {
     local id="$1" proto="$2" src_ip="$3" dst_ip="$4"
     local src_port="$5" dst_port="$6" iface="$7" comment="$8"
     local match=""
 
-    # 1. Manejo de interfaz - respetar exactamente lo que el usuario especificó
+    # 1. Manejo de interfaz-> Respetar exactamente lo especificado
     if [ "$iface" != "any" ]; then
         case "$iface" in
             out:*)
@@ -140,11 +139,31 @@ _nft_emit_rule() {
     local safe_comment
     safe_comment=$(printf "%s" "$comment" | sed "s/'/'\\\\''/g")
 
+    # 8. Regla de marcado principal (en nss_bypass_pre)
     printf "    # Rule id=%s: %s\n" "$id" "$safe_comment" >> "$FW_SCRIPT"
     printf "    nft add rule inet fw4 %s %s ct mark set ct mark or %s comment '\"NSS-Switch id=%s: %s\"'\n" \
         "$NFT_CHAIN_PRE" "$match" "$NSS_MARK" "$id" "$safe_comment" >> "$FW_SCRIPT"
+
+    # 9. Reglas de preservación de bits (solo para esta regla)
+    # POSTROUTING: guardar en ct mark
+    printf "    nft add rule inet fw4 %s %s ct mark set ct mark xor %s comment '\"NSS-Switch: clear bypass mark from ct\"'\n" \
+        "$NFT_CHAIN_POST" "$match" "$NSS_MARK" >> "$FW_SCRIPT"
+    printf "    nft add rule inet fw4 %s %s ct mark set ct mark or %s comment '\"NSS-Switch: save bypass mark to conntrack\"'\n" \
+        "$NFT_CHAIN_POST" "$match" "$NSS_MARK" >> "$FW_SCRIPT"
+
+    # PREROUTING: restaurar en meta mark
+    printf "    nft add rule inet fw4 %s %s meta mark set meta mark xor %s comment '\"NSS-Switch: clear bypass mark from meta\"'\n" \
+        "$NFT_CHAIN_PRE" "$match" "$NSS_MARK" >> "$FW_SCRIPT"
+    printf "    nft add rule inet fw4 %s %s meta mark set meta mark or %s comment '\"NSS-Switch: restore bypass mark from conntrack\"'\n" \
+        "$NFT_CHAIN_PRE" "$match" "$NSS_MARK" >> "$FW_SCRIPT"
 }
+
+
+
+
 # ─── Apply: generate script and reload firewall ───────────────────────────────
+# DEBUG PR-1
+# firewall reload NO está funcionando en todos los casos, y tampoco podemos hacer un fw restart
 nft_apply() {
     nft_generate_script || return 1
     _nft_ensure_fw4_include
@@ -156,10 +175,16 @@ nft_apply() {
         /etc/init.d/firewall reload > /dev/null 2>&1
     fi
 
+    # DEBUG PR-1 Por eso, ejecutamos especificamente AQUI el script generado
+    if [ -f "$FW_SCRIPT" ]; then
+        dbg "Executing $FW_SCRIPT"
+        sh "$FW_SCRIPT" 2>/dev/null
+    fi
+
     ui_ok "Firewall reloaded, NSS-Switch rules applied"
 }
 
-# ─── Ensure /etc/firewall.d/nss-bypass but in the proper way ────────
+# ─── Ensure /etc/firewall.d/nss-bypass-rules but in the proper way ────────
 _nft_ensure_fw4_include() {
     # DEBUG
     # LO hardcodeo, porque querré exportar esta y otras funcs a C
@@ -181,7 +206,7 @@ _nft_ensure_fw4_include() {
 # ─── Ensure UCI include block exists in /etc/config/firewall ──────────────────
 _nft_ensure_uci_include() {
     if ! uci -q show firewall.nss_bypass_include >/dev/null 2>&1; then
-        dbg "Adding UCI include for nss-bypass"
+        dbg "Adding UCI include for nss-bypass-rules"
         # DEBUG -> Evaluate possible error warns
         # uci add firewall include > /dev/null
         if ! uci add firewall include > /dev/null 2>&1; then
@@ -190,7 +215,7 @@ _nft_ensure_uci_include() {
         fi
         uci rename firewall.@include[-1]="nss_bypass_include"
         uci set firewall.nss_bypass_include.type='script'
-        uci set firewall.nss_bypass_include.path='/etc/firewall.d/nss-bypass'
+        uci set firewall.nss_bypass_include.path='/etc/firewall.d/nss-bypass-rules'
         uci commit firewall
         ui_ok "UCI include added to /etc/config/firewall"
     fi
@@ -199,7 +224,7 @@ _nft_ensure_uci_include() {
 # ─── Remove UCI include from /etc/config/firewall ────────────────────────────
 _nft_remove_uci_include() {
     if uci -q show firewall.nss_bypass_include >/dev/null 2>&1; then
-        dbg "Removing UCI include for nss-bypass"
+        dbg "Removing UCI include for nss-bypass-rules"
         uci -q delete firewall.nss_bypass_include
         uci -q commit firewall
         dbg "UCI include removed from /etc/config/firewall"
@@ -237,81 +262,50 @@ nft_validate_ipv6() {
     local ip="$1"
     local original="$ip"
 
-    # Extraer parte IP y CIDR
     local cidr=""
     case "$ip" in
         */*)
             cidr="${ip##*/}"
             ip="${ip%%/*}"
-            # Validar CIDR 0-128
             [ "$cidr" -ge 0 ] 2>/dev/null || return 1
             [ "$cidr" -le 128 ] 2>/dev/null || return 1
             ;;
     esac
 
-    # Normalizar: convertir a minúsculas
     ip=$(echo "$ip" | tr 'A-F' 'a-f')
-
-    # Regla 1: Solo caracteres válidos
     echo "$ip" | grep -qE '^[0-9a-f:]+$' || return 1
 
-    # Regla 2: No puede empezar ni terminar con : (excepto ::)
     case "$ip" in
         :*) [ "$ip" != "::" ] && return 1 ;;
         *:) [ "$ip" != "::" ] && return 1 ;;
     esac
 
-    # Regla 3: Contar :: (máximo uno)
     local double_colon_count=$(echo "$ip" | grep -o "::" | wc -l)
     [ "$double_colon_count" -gt 1 ] && return 1
 
-    # Regla 4: Descomponer en grupos
-    # Reemplazar :: por un marcador temporal
+    # Contar grupos (sin ::)
+    local groups=$(echo "$ip" | tr ':' '\n' | grep -c . 2>/dev/null)
     local has_double_colon=0
-    if echo "$ip" | grep -q "::"; then
-        has_double_colon=1
-        ip=$(echo "$ip" | sed 's/::/:FFFF:/')
-    fi
+    echo "$ip" | grep -q "::" && has_double_colon=1
 
-    # Separar por :
-    local old_ifs="$IFS"
-    IFS=':'
-    set -- $ip
-    local groups=$#
-    IFS="$old_ifs"
-
-    # Regla 5: Número de grupos válido
-    # Sin :: -> exactamente 8 grupos
-    # Con :: -> entre 1 y 7 grupos visibles (los ceros implícitos completan hasta 8)
+    # Con ::, los grupos visibles pueden ser entre 0 y 8
+    # Sin ::, deben ser exactamente 8
     if [ "$has_double_colon" -eq 0 ]; then
-        # Sin ::, deben ser exactamente 8 grupos
         [ "$groups" -ne 8 ] && return 1
     else
-        # Con ::, los grupos visibles deben ser entre 1 y 7
-        # (porque :: ya cuenta como al menos un grupo de ceros)
-        [ "$groups" -lt 1 ] && return 1
-        [ "$groups" -gt 7 ] && return 1
+        # Con ::, los grupos visibles pueden ser 0-7 (8 sería :: con 8 grupos? no es válido)
+        [ "$groups" -gt 8 ] && return 1
     fi
 
-    # Regla 6: Validar cada grupo
-    old_ifs="$IFS"
+    # Validar cada grupo
+    local old_ifs="$IFS"
     IFS=':'
     for group in $ip; do
-        # Saltar el marcador FFFF (no es un grupo real)
-        [ "$group" = "FFFF" ] && continue
-
-        # Grupo vacío? (solo puede pasar si era :: y ya lo manejamos)
         [ -z "$group" ] && continue
-
-        # Longitud del grupo: 1-4 caracteres
         len=$(echo -n "$group" | wc -c)
         [ "$len" -lt 1 ] && return 1
         [ "$len" -gt 4 ] && return 1
-
-        # Validar que sea hexadecimal
         echo "$group" | grep -qE '^[0-9a-f]+$' || return 1
-
-        # Convertir a decimal y validar rango (0-65535)
         local dec
         dec=$(printf "%d" "0x$group" 2>/dev/null)
         [ "$dec" -ge 0 ] 2>/dev/null || return 1
@@ -319,11 +313,8 @@ nft_validate_ipv6() {
     done
     IFS="$old_ifs"
 
-    # Regla 7: IPv4 incrustada? (formato ::ffff:192.168.1.1)
     if echo "$original" | grep -qiE '::ffff:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
-        # Extraer la parte IPv4 y validarla
         local ipv4_part="${original##*:}"
-        # Validar IPv4 con función existente
         nft_validate_ipv4 "$ipv4_part" || return 1
     fi
 

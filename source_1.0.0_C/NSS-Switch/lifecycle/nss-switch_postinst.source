@@ -1,10 +1,12 @@
 #!/usr/bin/env ash
 # 1.0.0-r1 aarch64
 # NSS-Switch post-installation script
-# Runs after APK installs files to /usr/bin/NSS-Switch/
+# Runs after APK installs files
 
-INSTALL_DIR=/usr/bin/NSS-Switch
-FIREWALL_LINK=/etc/firewall.d/nss-bypass
+INSTALL_DIR=/usr/lib/nss-switch
+CONFIG_FILE=/etc/config/nss-switch
+RULES_FILE=/etc/nss-switch/rules.conf
+FW_SCRIPT=/etc/firewall.d/nss-bypass-rules
 FW_CONF=/etc/config/firewall
 
 log() {
@@ -16,36 +18,31 @@ log "Post-install starting..."
 
 # 1. Set permissions
 chmod 755 "$INSTALL_DIR/nss-switch.sh"
-chmod 644 "$INSTALL_DIR/config"
-chmod 755 "$INSTALL_DIR/lib/"*.sh
-chmod 755 "$INSTALL_DIR/bin/"*
-chmod 755 "$INSTALL_DIR/firewall.d/nss-bypass"
-[ -f "$INSTALL_DIR/state/rules.conf" ] && chmod 644 "$INSTALL_DIR/state/rules.conf"
+[ -f "$CONFIG_FILE" ] && chmod 644 "$CONFIG_FILE"
+chmod 755 "$INSTALL_DIR/lib/"*.sh 2>/dev/null || true
+[ -f "$INSTALL_DIR/bin/nss-ct-dump" ] && chmod 755 "$INSTALL_DIR/bin/nss-ct-dump"
+[ -f "$FW_SCRIPT" ] && chmod 755 "$FW_SCRIPT"
+[ -f "$RULES_FILE" ] && chmod 644 "$RULES_FILE"
 
 log "Permissions set"
 
 # 2. Create symlink in PATH
 if [ ! -L /usr/bin/nss-switch ]; then
-    ln -s "$INSTALL_DIR/nss-switch.sh" /usr/bin/nss-switch
+    ln -sf "$INSTALL_DIR/nss-switch.sh" /usr/bin/nss-switch
     log "Symlink created: /usr/bin/nss-switch"
 fi
 
-# 3. Create firewall.d symlink
-if [ -L "$FIREWALL_LINK" ]; then
-    ln -sf "$INSTALL_DIR/firewall.d/nss-bypass" "$FIREWALL_LINK"
-    log "Firewall symlink updated"
-elif [ -f "$FIREWALL_LINK" ]; then
-    mv "$FIREWALL_LINK" "${FIREWALL_LINK}.bak"
-    ln -s "$INSTALL_DIR/firewall.d/nss-bypass" "$FIREWALL_LINK"
-    log "Firewall symlink created (existing file backed up)"
-else
-    ln -s "$INSTALL_DIR/firewall.d/nss-bypass" "$FIREWALL_LINK"
-    log "Firewall symlink created"
-fi
+# 3. Ensure firewall.d script is correctly referenced (no symlink needed, it's already there)
+# The APKBUILD installs the script directly to /etc/firewall.d/nss-bypass-rules
+log "Firewall script ready at $FW_SCRIPT"
 
-# 4. Add UCI include to firewall config (idempotent)
-if ! grep -q "nss_bypass_include" "$FW_CONF" 2>/dev/null; then
-    printf '\nconfig include '\''nss_bypass_include'\''\n\toption type '\''script'\''\n\toption path '\''/etc/firewall.d/nss-bypass'\''\n' >> "$FW_CONF"
+# 4. Add UCI include to firewall config using uci commands
+if ! uci -q get firewall.nss_bypass_include.type >/dev/null 2>&1; then
+    uci add firewall include > /dev/null 2>&1
+    uci rename firewall.@include[-1]="nss_bypass_include" 2>/dev/null
+    uci set firewall.nss_bypass_include.type='script' 2>/dev/null
+    uci set firewall.nss_bypass_include.path="$FW_SCRIPT" 2>/dev/null
+    uci commit firewall 2>/dev/null
     log "UCI include added to $FW_CONF"
 else
     log "UCI include already present"

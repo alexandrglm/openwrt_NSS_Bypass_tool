@@ -292,13 +292,40 @@ ct_count_bypassed() {
     echo "$count"
 }
 
+# DEBUG PR-1
+# ─── Clear conntrack entries matching rule criteria ───────────────────────────
+_ct_clear_all_marks() {
+    dbg "Clearing all NSS-Switch marks from conntrack"
+    local count=0
+
+    # Usar conntrack -m si está disponible (más eficiente)
+    if conntrack -D -m "$NSS_MARK" 2>/dev/null | grep -q "deleted"; then
+        count=$(conntrack -D -m "$NSS_MARK" 2>/dev/null | wc -l)
+    else
+        # Fallback: buscar y eliminar manualmente
+        conntrack -L 2>/dev/null | grep "mark=$NSS_MARK" | while read -r line; do
+            proto=$(echo "$line" | awk '{print $1}')
+            src=$(echo "$line" | grep -oE 'src=[^ ]+' | head -1 | cut -d= -f2)
+            dst=$(echo "$line" | grep -oE 'dst=[^ ]+' | head -1 | cut -d= -f2)
+            sport=$(echo "$line" | grep -oE 'sport=[^ ]+' | head -1 | cut -d= -f2)
+            dport=$(echo "$line" | grep -oE 'dport=[^ ]+' | head -1 | cut -d= -f2)
+            [ -n "$proto" ] && [ -n "$src" ] && [ -n "$dst" ] && \
+                conntrack -D -p "$proto" -s "$src" -d "$dst" --sport "$sport" --dport "$dport" 2>/dev/null && count=$((count+1))
+        done
+    fi
+
+    ui_ok "Cleared $count connections with NSS-Switch mark"
+    ecm_defunct_all
+}
 # ─── Clear conntrack entries matching rule criteria ───────────────────────────
 ct_clear_rule_marks() {
     local proto="$1" src_ip="$2" dst_ip="$3"
     local sport="$4" dport="$5" iface="$6"
     dbg "Flushing connections for rule: proto=$proto src=$src_ip dst=$dst_ip sport=$sport dport=$dport iface=$iface"
+
     local filter=""
     [ "$proto"  != "any" ] && filter="$filter -p $proto"
+
     if [ "$src_ip" != "any" ] && [ "$dst_ip" != "any" ]; then
         filter="$filter -s $src_ip -d $dst_ip"
     elif [ "$src_ip" != "any" ]; then
@@ -306,6 +333,7 @@ ct_clear_rule_marks() {
     elif [ "$dst_ip" != "any" ]; then
         filter="$filter -d $dst_ip"
     fi
+
     if [ "$sport" != "any" ] && [ "$dport" != "any" ]; then
         filter="$filter --sport $sport --dport $dport"
     elif [ "$sport" != "any" ]; then
@@ -313,32 +341,39 @@ ct_clear_rule_marks() {
     elif [ "$dport" != "any" ]; then
         filter="$filter --dport $dport"
     fi
-    local src_net=""
-    if [ "$iface" != "any" ] && [ "$src_ip" = "any" ]; then
-        case "$iface" in
-            out:*)
-                local out_iface="${iface#out:}"
-                src_net=$(ip addr show "$out_iface" 2>/dev/null | \
-                        grep -E 'inet |inet6 ' | head -1 | awk '{print $2}')
-                ;;
-            *)
-                src_net=$(ip route show dev "$iface" 2>/dev/null | \
-                        grep -v default | head -1 | awk '{print $1}')
-                ;;
-        esac
-        [ -n "$src_net" ] && filter="$filter -s $src_net"
-    fi
+
+    # DEBUG PR-1
     if [ -n "$filter" ]; then
         dbg "conntrack -D $filter"
         conntrack -D $filter 2>/dev/null
-        ui_ok "Matching conntrack entries flushed"
+        ui_ok "Flushed matching conntrack entries"
     else
-        ui_warn "Rule matches ALL connections - flushing entire conntrack"
-        conntrack -F 2>/dev/null
-        ui_ok "All conntrack entries flushed"
+        # IFACE ONLY
+        if [ "$iface" != "any" ]; then
+            local real_iface="${iface#out:}"
+            # CONNTRACK -i
+            conntrack -D -i "$real_iface" 2>/dev/null && \
+                ui_ok "Flushed connections on interface $real_iface"
+        fi
+
+        # ANY rules
+        if [ "$proto" = "any" ] && [ "$src_ip" = "any" ] && [ "$dst_ip" = "any" ] && \
+           [ "$sport" = "any" ] && [ "$dport" = "any" ] && [ "$iface" = "any" ]; then
+            ui_warn "Rule matches ALL connections - flushing entire conntrack"
+            conntrack -F 2>/dev/null
+            ui_ok "All conntrack entries flushed"
+            _ct_clear_all_marks
+            return 0
+        fi
     fi
-    ecm_defunct_all
+
+    # DEBUG PR-1
+    _ct_clear_all_marks
 }
+
+
+
+
 
 # ─── Debug: show conntrack entries with our mark ─────────────────────────────
 ct_debug_mark() {

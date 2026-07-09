@@ -1,4 +1,59 @@
 #  Changelog
+ 
+## 07 July 2026
+### Pull Request Review Fixes, Part 2
+
+* **fix(UCI config):**
+  * Migrated from shell-sourced `/etc/config/nss-switch-conf` to proper UCI format `/etc/config/nss-switch`.
+  * Added `uci_load_config()` with automatic creation of a default config file if missing.
+  * Updated `cmd_config()` to use `uci` commands for reading/writing configuration.
+  * Updated `debug.sh` `cmd_debug_log()` to use `uci` for enabling/disabling debug mode.
+  * Update lifecycle methods to get vars via UCI.
+
+* **fix(comment validation):**
+  * Added `nft_validate_comment()` to reject forbidden characters: `;`, `"`, `'`, `\`, `$`, `|`, control characters.
+  * Updated `rules_validate()` to accept `$comment` as the 7th parameter, and validate them.
+  * Fixed `cmd_add()` to pass comment to `rules_validate()`.
+
+* **fix(nft rules, ct mark preservation):**
+  * Replaced mark-overwriting rules (`ct mark set meta mark and ${NSS_MARK}`) with bit-preserving operations (`ct mark set (ct mark & ~${NSS_MARK}) | (meta mark & ${NSS_MARK})`) to avoid clobbering bits used by QoS, `fw4`, policy routing, and other subsystems.
+  * Moved preservation rules from global `nft_add_chains()` into per-rule `_nft_emit_rule()`, so they only apply to matching connections.
+  * Added `mangle_output` hook to apply bypass rules to router-originated traffic.
+
+* **fix(conntrack flushing):**
+  * Added `_ct_clear_all_marks()` helper to clean all NSS-Switch marks from conntrack.
+  * `ct_clear_rule_marks()` now always calls `_ct_clear_all_marks()` after flushing, ensuring no residual marks remain.
+  * Enhanced interface flushing to use `conntrack -D -i`, with fallback to IP/subnet-based flushing for both src/dst.
+
+* **fix(`nss-ct-dump.c` IPv6 compression bug):**
+  * Fixed `compress_ipv6()`: a zero-group run not starting at group 0 emitted only a single `:` instead of `::`, producing malformed addresses (e.g. `2606:4700:4700:1111` instead of `2606:4700:4700::1111`) that were invalid both for `nft_validate_ipv6()` and for nftables syntax.
+  * Root cause fixed at the source (compression), so no downstream expansion/workaround is needed in `rules_validate()` or `_nft_emit_rule()`.
+  * Removed hardcoded `NSS_MARK` define; now read dynamically from UCI via `get_nss_mark_from_uci()`.
+  * Added `strcpy(iface, "?")` before `popen()` to prevent reuse of stale interface values from previous lookups.
+  * Improved local IP detection via `load_local_ips()` / `is_local_ip()` for more accurate interface display of router-originated traffic.
+
+* **fix(watch UI, sorting):**
+  * Added interactive column sorting in watch mode.
+  * Added `_flush_input()` helper to prevent key echo and input buffer flooding.
+  * Updated `ui_conn_header()` to display numbered column titles (`NUM₁ PROTO₂ SRC₃ DST₄ IFACE₅ NSS₆`).
+  * Updated `ui_hint_bar()` to display current sort column and available key shortcuts.
+
+* **fix(postrm & `flush --all`):**
+  * Corrected `flush --all` to remove `/etc/firewall.d/nss-bypass-rules` instead of the incorrect path previously used.
+  * Added `conntrack -D -m "$NSS_MARK"` to `flush --all` to remove residual conntrack marks.
+  * Removed deletion of conffiles from `postrm` to respect `opkg` conffile handling and preserve user configuration during package removal.
+
+* **fix(debug logging):**
+  * Debug log (`/tmp/nss-switch.log`) is now created only when explicitly enabled via `nss-switch debug log`.
+  * `dbg()` writes to the log only when debug mode is enabled and the log file already exists.
+  * `nft_apply()` redirects firewall reload output to the debug log only while debug logging is enabled.
+
+* **fix(`debug env`, BusyBox version)**
+
+* **fix(nft_generate_script execution):**
+  * Added explicit execution of the generated firewall script (`sh "$FW_SCRIPT"`) inside `nft_apply()` after firewall reload, ensuring generated nftables rules are actually applied.
+
+---
 
 ## 28 May 2026:
 
@@ -10,6 +65,7 @@
 
 * fix(conntrack flush): Enhanced interface handling in kill command to derive IP/subnet from interface name for both input (iifname) and output (oifname/local:) cases.
 
+---
 
 ## 27 May 2026:
 

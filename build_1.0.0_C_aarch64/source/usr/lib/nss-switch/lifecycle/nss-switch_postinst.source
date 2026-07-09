@@ -4,7 +4,7 @@
 # Runs after APK installs files
 
 INSTALL_DIR=/usr/lib/nss-switch
-CONFIG_FILE=/etc/config/nss-switch-conf
+CONFIG_FILE=/etc/config/nss-switch
 RULES_FILE=/etc/nss-switch/rules.conf
 FW_SCRIPT=/etc/firewall.d/nss-bypass-rules
 FW_CONF=/etc/config/firewall

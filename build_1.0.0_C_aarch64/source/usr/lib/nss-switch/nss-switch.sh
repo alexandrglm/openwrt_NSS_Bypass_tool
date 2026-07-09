@@ -9,13 +9,44 @@
 # ─── Resolve our own directory ────────────────────────────────────────────────
 SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
-# ─── Load config ──────────────────────────────────────────────────────────────
-CONFIG_FILE=/etc/config/nss-switch-conf
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "[ERR ] Config file not found: $CONFIG_FILE" >&2
-    exit 1
-fi
-. "$CONFIG_FILE"
+# ─── UCI cinfig handler  ────────────────────────
+uci_load_config() {
+    local section="settings"
+    local uci_file="/etc/config/nss-switch"
+
+    if [ ! -f "$uci_file" ]; then
+        uci -q set nss-switch.$section=settings
+        uci -q set nss-switch.$section.persist_default="no"
+        uci -q set nss-switch.$section.nss_mark="0x00010000"
+        uci -q set nss-switch.$section.nss_mark_mask="0x00010000"
+        uci -q set nss-switch.$section.ecm_debugfs="/sys/kernel/debug/ecm"
+        uci -q set nss-switch.$section.nft_table="inet fw4"
+        uci -q set nss-switch.$section.nft_chain_pre="nss_bypass_pre"
+        uci -q set nss-switch.$section.nft_chain_post="nss_bypass_post"
+        uci -q set nss-switch.$section.rules_file="/etc/nss-switch/rules.conf"
+        uci -q set nss-switch.$section.debug_log="/tmp/nss-switch.log"
+        uci -q set nss-switch.$section.fw_script="/etc/firewall.d/nss-bypass-rules"
+        uci -q set nss-switch.$section.watch_interval="3"
+        uci -q set nss-switch.$section.debug_mode="no"
+        uci commit nss-switch
+        dbg "Created default UCI config: $uci_file"
+    fi
+
+    PERSIST_DEFAULT=$(uci -q get nss-switch.$section.persist_default || echo "no")
+    NSS_MARK=$(uci -q get nss-switch.$section.nss_mark || echo "0x00010000")
+    NSS_MARK_MASK=$(uci -q get nss-switch.$section.nss_mark_mask || echo "0x00010000")
+    ECM_DEBUGFS=$(uci -q get nss-switch.$section.ecm_debugfs || echo "/sys/kernel/debug/ecm")
+    NFT_TABLE=$(uci -q get nss-switch.$section.nft_table || echo "inet fw4")
+    NFT_CHAIN_PRE=$(uci -q get nss-switch.$section.nft_chain_pre || echo "nss_bypass_pre")
+    NFT_CHAIN_POST=$(uci -q get nss-switch.$section.nft_chain_post || echo "nss_bypass_post")
+    RULES_FILE=$(uci -q get nss-switch.$section.rules_file || echo "/etc/nss-switch/rules.conf")
+    DEBUG_LOG=$(uci -q get nss-switch.$section.debug_log || echo "/tmp/nss-switch.log")
+    FW_SCRIPT=$(uci -q get nss-switch.$section.fw_script || echo "/etc/firewall.d/nss-bypass-rules")
+    WATCH_INTERVAL=$(uci -q get nss-switch.$section.watch_interval || echo "3")
+    DEBUG_MODE=$(uci -q get nss-switch.$section.debug_mode || echo "no")
+}
+
+uci_load_config
 
 # ─── Debug logging helper (available before libs load) ────────────────────────
 dbg() {
@@ -74,6 +105,7 @@ cmd_watch() {
     # PENDING
     # ui_check_width
 
+    local sort_mode=1
     local interval="${1:-$WATCH_INTERVAL}"
     local once=0
     [ "$1" = "--once" ] && { once=1; interval=0; }
@@ -99,6 +131,14 @@ cmd_watch() {
     # HAVE cursor (but NO alt_screen)
     ui_cursor_show
 
+    # Helper: flush all pending input from stdin (non-blocking)
+    _flush_input() {
+        local dummy
+        while read -s -t 0 -n 1 dummy 2>/dev/null; do
+            : # consume and discard
+        done
+    }
+
     # ── First run: show loading indicator ───────────────────────────────────
     ui_clear_screen
     ui_cursor_home
@@ -117,21 +157,49 @@ cmd_watch() {
     bypassed=$(ct_count_bypassed)
     rules=$(rules_count 2>/dev/null || echo 0)
 
-    # Function to render the full display
+    # Subfunction to render the full display (with optional sorting)
     _render_watch() {
+        local input_file="$1"
+        local current_sort="$2"
+
+        # Map sort mode to readable name
+        local sort_name=""
+        case "$current_sort" in
+            1) sort_name="ID" ;;
+            2) sort_name="PROTO" ;;
+            3) sort_name="SRC" ;;
+            4) sort_name="DST" ;;
+            5) sort_name="IFACE" ;;
+            6) sort_name="NSS" ;;
+            *) sort_name="ID" ;;
+        esac
+
+        # Apply sorting if a sort mode is specified
+        local display_file="$input_file"
+        if [ -n "$current_sort" ] && [ "$current_sort" -ge 1 ] && [ "$current_sort" -le 6 ]; then
+            local sorted_tmp="/tmp/nss-watch-sorted.$$"
+            case "$current_sort" in
+                1) sort -t'|' -k1 -n "$input_file" > "$sorted_tmp" ;;
+                2) sort -t'|' -k2 "$input_file" > "$sorted_tmp" ;;
+                3) sort -t'|' -k3 "$input_file" > "$sorted_tmp" ;;
+                4) sort -t'|' -k4 "$input_file" > "$sorted_tmp" ;;
+                5) sort -t'|' -k5 "$input_file" > "$sorted_tmp" ;;
+                6) sort -t'|' -k6 "$input_file" > "$sorted_tmp" ;;
+            esac
+            display_file="$sorted_tmp"
+        fi
+
         ui_clear_screen_scrollback
-        # Move cursor to home without clearing - this overwrites previous content
         ui_cursor_home
 
         ui_header_bar "NSS-Switch" "NSS Conntrack Live Monitor" "$(date +'%a %d %b  %H:%M:%S')"
-        ui_hint_bar "Ctrl+C exit  •  refresh every ${interval}s  •  ${ARROW} connections below  •  Use PgUp/PgDown or mouse to scroll"
+        ui_hint_bar "Ctrl+C / q exit  •  refresh every ${interval}s  •  Sorted by: ${sort_name}  •  1-6: Sort column"
 
         ui_watch_stats_panel "$total" "$bypassed" \
             "$(ecm_frontend)" "$(ecm_engine)" "$rules" "$interval"
 
         ui_conn_header
 
-        # Read from tmpfile — no pipe, so INT trap reaches parent correctly
         while IFS='|' read -r n proto src dst iface nss bypass mark state; do
             local sip sp dip dp ss ds
             sip=$(echo "$src" | cut -d'#' -f1)
@@ -141,17 +209,18 @@ cmd_watch() {
             if echo "$sip" | grep -q ":"; then ss="[${sip}]:${sp}"; else ss="${sip}:${sp}"; fi
             if echo "$dip" | grep -q ":"; then ds="[${dip}]:${dp}"; else ds="${dip}:${dp}"; fi
             ui_conn_row "$n" "$proto" "$ss" "$ds" "$iface" "$nss" "$bypass"
-        done < "$_watch_tmp"
+        done < "$display_file"
+
+        [ "$display_file" != "$input_file" ] && rm -f "$display_file"
 
         ui_sep
 
         local file_total
-        file_total=$(wc -l < "$_watch_tmp" 2>/dev/null || echo 0)
+        file_total=$(wc -l < "$input_file" 2>/dev/null || echo 0)
 
         local table_width
         table_width=$(ui_table_width)
 
-        # Show warning if terminal too narrow for IPv6
         if [ $TERM_COLS -lt $((table_width + 10)) ] && [ $file_total -gt 0 ]; then
             printf "${FG_DIM}%*s${C_RESET}\n" "$table_width" " "
             printf "  ${FG_YELLOW}${WARN_SYM}${C_RESET} ${C_DIM}Terminal narrow (${TERM_COLS}c), long IPv6 addresses may be truncated. Use wider terminal (125c) for full visibility.${C_RESET}\n"
@@ -159,49 +228,62 @@ cmd_watch() {
             printf "${C_DIM}Total connections: %d  •  Use PgUp/PgDown or mouse to scroll${C_RESET}\n" "$file_total"
         fi
 
-        # Clear any leftover content below the cursor position
         ui_clear_cursor_bellow
     }
 
     # Render first time
-    _render_watch
+    _render_watch "$_watch_tmp" "$sort_mode"
 
     [ "$_watch_exit" -eq 1 ] && { ui_cursor_show; rm -f "$_watch_tmp"; rm -f /tmp/nss-iface.* 2>/dev/null; trap - INT TERM; return 0; }
     [ "$once"        -eq 1 ] && { ui_cursor_show; rm -f "$_watch_tmp"; rm -f /tmp/nss-iface.* 2>/dev/null; trap - INT TERM; return 0; }
 
     # ── Main loop (subsequent refreshes) ────────────────────────────────────
     while [ "$_watch_exit" -eq 0 ]; do
-        sleep "$interval"
+        # Read one key with timeout (waits up to interval seconds)
+        key=""
+        read -s -t "$interval" -n 1 key 2>/dev/null
+
+        # Process valid keys
+        case "$key" in
+            1|2|3|4|5|6)
+                sort_mode="$key"
+                _render_watch "$_watch_tmp" "$sort_mode"
+                _flush_input
+                ;;
+            q|Q)
+                _watch_exit=1
+                break
+                ;;
+            *)
+                if [ -n "$key" ]; then
+                    _flush_input
+                fi
+                ;;
+        esac
+
         [ "$_watch_exit" -eq 1 ] && break
 
         ui_get_term_size
 
-        # Refresh data
         ct_dump_all_full > "$_watch_tmp" 2>/dev/null
         total=$(ct_count)
         bypassed=$(ct_count_bypassed)
         rules=$(rules_count 2>/dev/null || echo 0)
 
-        # Re-render
-        _render_watch
+        _render_watch "$_watch_tmp" "$sort_mode"
 
         [ "$once" -eq 1 ] && break
     done
 
-    # Show cursor again before exit
     ui_cursor_show
     rm -f "$_watch_tmp"
     rm -f /tmp/nss-iface.* 2>/dev/null
     trap - INT TERM
 }
 
-
 # ─── COMMAND: pick ────────────────────────────────────────────────────────────
 cmd_pick() {
     check_root
-
-    # PENDING
-    # ui_check_width
 
     local _pick_tmp
     _pick_tmp=$(mktemp /tmp/nss-switch-pick.XXXXXX)
@@ -209,7 +291,7 @@ cmd_pick() {
     local _selection_tmp
     _selection_tmp=$(mktemp /tmp/nss-switch-selection.XXXXXX)
 
-    # Trap for cleanup only - NO alt_screen tricks
+    # Trap for cleanup only... NO alt_screen tricks
     trap '
         rm -f "$_pick_tmp" "$_selection_tmp" 2>/dev/null
         rm -f /tmp/nss-iface.* 2>/dev/null
@@ -220,7 +302,7 @@ cmd_pick() {
         exit 0
     ' INT TERM
 
-    # NO ui_watch_init() - that enables alt_screen which we don't want for pick
+    # NO ui_watch_init() that enables alt_screen NOT needed for pick
     # Just clear screen and show the picker normally
 
     ui_clear_screen
@@ -299,31 +381,31 @@ cmd_pick() {
     ui_kv "Bypassed"  "$bypass"
     ui_sep
 
-    ui_section "What should the bypass rule match on?"
-    ui_bold "You can combine multiple criteria. Answer each:"
+    ui_section "What should the bypass rule match on? "
+    ui_bold "You can combine multiple criteria. Answer each: "
     printf "\n"
 
     local r_proto="any" r_src_ip="any" r_dst_ip="any"
     local r_sport="any" r_dport="any" r_iface="any"
 
-    # Protocolo
+    # PRTOTOCOL
     if ui_ask_yn "Match on protocol ($proto)?" y; then
         r_proto="$proto"
     fi
 
-    # Source IP
+    # SRC-IP
     if ui_ask_yn "Match on source IP ($src_ip)?" n; then
         ui_ask_input "Enter source IP/CIDR (or press Enter to keep '$src_ip')" "$src_ip" "ip"
         r_src_ip="$UI_INPUT"
     fi
 
-    # Destination IP
+    # DST-IP
     if ui_ask_yn "Match on destination IP ($dst_ip)?" n; then
         ui_ask_input "Enter destination IP/CIDR (or press Enter to keep '$dst_ip')" "$dst_ip" "ip"
         r_dst_ip="$UI_INPUT"
     fi
 
-    # Puertos (solo si protocolo es tcp/udp)
+    # PORT
     if [ "$proto" = "tcp" ] || [ "$proto" = "udp" ]; then
         if ui_ask_yn "Match on source port ($src_port)?" n; then
             ui_ask_input "Source port" "$src_port" "port"
@@ -335,7 +417,7 @@ cmd_pick() {
         fi
     fi
 
-    # Interfaz
+    # IFACE
     if [ "$iface" != "?" ] && [ -n "$iface" ]; then
         case "$iface" in
             local:*)
@@ -353,7 +435,7 @@ cmd_pick() {
         esac
     fi
 
-    # Persistencia
+    # PERSISTANCE
     local persist="$PERSIST_DEFAULT"
     if ui_ask_yn "Make this rule persistent (survive reboot)?" "$([ "$PERSIST_DEFAULT" = "yes" ] && echo y || echo n)"; then
         persist="yes"
@@ -361,7 +443,7 @@ cmd_pick() {
         persist="no"
     fi
 
-    # Comentario
+    # COMMENT
     local default_comment="bypass from pick: $src_ip -> $dst_ip"
     ui_ask_input "Comment for this rule" "$default_comment" "string"
     local comment="$UI_INPUT"
@@ -379,7 +461,7 @@ cmd_pick() {
 
     rm -f /tmp/nss-iface.* 2>/dev/null
 
-    # Validar regla completa incluyendo comentario
+    # VALIDATE ALL
     if ! rules_validate "$r_proto" "$r_src_ip" "$r_dst_ip" "$r_sport" "$r_dport" "$r_iface" "$comment"; then
         ui_error "Validation failed — rule not added"
         return 1
@@ -441,7 +523,8 @@ cmd_add() {
     ui_kv "Comment"    "$comment"
     [ "$defunct_after" = "0" ] && ui_kv "Defunct" "SKIP"
 
-    rules_validate "$proto" "$src_ip" "$dst_ip" "$sport" "$dport" "$iface" || return 1
+    # DEBUG PR1
+    rules_validate "$proto" "$src_ip" "$dst_ip" "$sport" "$dport" "$iface" "$comment" || return 1
 
     local new_id
     new_id=$(rules_add "$proto" "$src_ip" "$dst_ip" "$sport" "$dport" "$iface" "$persist" "$comment")
@@ -477,8 +560,16 @@ cmd_list() {
 
 # ─── COMMAND: remove ──────────────────────────────────────────────────────────
 cmd_remove() {
+
+    # DEBUG PR 1
+    # echo "DEBUG: $# arguments: $@" >&2
+
     check_root
     local id="$1"
+
+    # DEBUG PR 1
+    # echo "DEBUG: id=$id" >&2
+
     if [ -z "$id" ]; then
         ui_error "Usage: nss-switch remove <rule-id>"
         return 1
@@ -490,13 +581,13 @@ cmd_remove() {
     line=$(rules_get "$id") || { ui_error "Rule $id not found"; return 1; }
     rules_parse "$line"
     ui_kv "ID"      "$RULE_ID"
-    ui_kv "Proto"   "$KILL_PROTO"
-    ui_kv "Src IP"  "$KILL_SRC_IP"
-    ui_kv "Dst IP"  "$KILL_DST_IP"
-    ui_kv "Sport"   "$KILL_SPORT"
-    ui_kv "Dport"   "$KILL_DPORT"
-    ui_kv "Iface"   "$KILL_IFACE"
-    ui_kv "Comment" "$KILL_COMMENT"
+    ui_kv "Proto"   "$RULE_PROTO"
+    ui_kv "Src IP"  "$RULE_SRC_IP"
+    ui_kv "Dst IP"  "$RULE_DST_IP"
+    ui_kv "Sport"   "$RULE_SPORT"
+    ui_kv "Dport"   "$RULE_DPORT"
+    ui_kv "Iface"   "$RULE_IFACE"
+    ui_kv "Comment" "$RULE_COMMENT"
 
     ui_confirm "Remove this rule?" || { ui_warn "Aborted"; return 0; }
 
@@ -504,8 +595,8 @@ cmd_remove() {
     nft_apply
 
     ui_info "Clearing conntrack entries for this rule..."
-    ct_clear_rule_marks "$KILL_PROTO" "$KILL_SRC_IP" "$KILL_DST_IP" \
-        "$KILL_SPORT" "$KILL_DPORT" "$KILL_IFACE"
+    ct_clear_rule_marks "$RULE_PROTO" "$RULE_SRC_IP" "$RULE_DST_IP" \
+        "$RULE_SPORT" "$RULE_DPORT" "$RULE_IFACE"
 
     ui_info "Defuncting ECM so NSS can re-accelerate..."
     ecm_defunct_all
@@ -530,6 +621,7 @@ cmd_flush() {
             ecm_defunct_all
             ui_ok "All rules flushed from nftables. ECM will re-accelerate all flows."
             ;;
+        # DEBUG PR-1
         --all)
             ui_warn "This removes ALL NSS-Switch configuration including persistent rules"
             ui_confirm "Are you sure?" || return 0
@@ -538,8 +630,11 @@ cmd_flush() {
             ecm_defunct_all
             # Remove fw4 include
             _nft_remove_uci_include
-            # Remove symlink
-            rm -f /etc/firewall.d/nss-bypass 2>/dev/null || true
+
+            # DEBUG PR-1
+            rm -f "$FW_SCRIPT" 2>/dev/null || true
+            conntrack -D -m "$NSS_MARK" 2>/dev/null
+
             ui_ok "NSS-Switch fully removed. Reload firewall to clean live rules."
             ;;
         --temp)
@@ -555,124 +650,6 @@ cmd_flush() {
             return 1
             ;;
     esac
-}
-
-# ─── COMMAND: kill ───────────────────────────────────────────────────────────
-cmd_kill() {
-    local first_arg="$1"
-    local proto="any" src_ip="any" dst_ip="any"
-    local sport="any" dport="any" iface="any"
-
-    if echo "$first_arg" | grep -qE '^[0-9]+$'; then
-        local id="$first_arg"
-        shift
-        local line
-        line=$(rules_get "$id") || { ui_error "Rule $id not found"; return 1; }
-        rules_parse "$line"
-
-        proto="$RULE_PROTO"
-        src_ip="$RULE_SRC_IP"
-        dst_ip="$RULE_DST_IP"
-        sport="$RULE_SPORT"
-        dport="$RULE_DPORT"
-        iface="$RULE_IFACE"
-
-        ui_banner
-        ui_section "Force Kill Rule $id"
-    else
-        while [ $# -gt 0 ]; do
-            case "$1" in
-                --proto)      proto="$2";    shift 2 ;;
-                --src-ip)     src_ip="$2";   shift 2 ;;
-                --dst-ip)     dst_ip="$2";   shift 2 ;;
-                --src-port)   sport="$2";    shift 2 ;;
-                --dst-port)   dport="$2";    shift 2 ;;
-                --iface)      iface="$2";    shift 2 ;;
-                *)
-                    ui_error "Unknown option: $1"
-                    ui_info "Usage: nss-switch kill [rule-id] [--proto X] [--src-ip X] [--dst-ip X] [--src-port X] [--dst-port X] [--iface X]"
-                    return 1
-                    ;;
-            esac
-        done
-
-        ui_banner
-        ui_section "Force Kill Connections"
-    fi
-
-    ui_kv "Proto" "$proto"
-    ui_kv "Src IP" "$src_ip"
-    ui_kv "Dst IP" "$dst_ip"
-    ui_kv "Src Port" "$sport"
-    ui_kv "Dst Port" "$dport"
-    ui_kv "Iface" "$iface"
-    ui_sep
-
-    ui_warn "This will forcibly remove active connections matching these criteria"
-    ui_confirm "Proceed?" || return 0
-
-    local flushed=0
-
-    if [ "$dport" != "any" ]; then
-        conntrack -D -p udp --dport "$dport" 2>/dev/null && flushed=1
-        conntrack -D -p tcp --dport "$dport" 2>/dev/null && flushed=1
-    fi
-
-    if [ "$sport" != "any" ]; then
-        conntrack -D -p udp --sport "$sport" 2>/dev/null && flushed=1
-        conntrack -D -p tcp --sport "$sport" 2>/dev/null && flushed=1
-    fi
-
-    if [ "$dst_ip" != "any" ]; then
-        conntrack -D -d "$dst_ip" 2>/dev/null && flushed=1
-    fi
-
-    if [ "$src_ip" != "any" ]; then
-        conntrack -D -s "$src_ip" 2>/dev/null && flushed=1
-    fi
-
-    if [ "$iface" != "any" ]; then
-        local real_iface="$iface"
-        local is_output=0
-
-        case "$iface" in
-            out:*|local:*)
-                is_output=1
-                real_iface="${iface#*:}"
-                ;;
-        esac
-
-        local iface_net=""
-
-        if [ $is_output -eq 1 ]; then
-            iface_net=$(ip addr show "$real_iface" 2>/dev/null | grep -oE 'inet [0-9.]+/[0-9]+' | head -1 | cut -d' ' -f2)
-        else
-            iface_net=$(ip route show dev "$real_iface" 2>/dev/null | grep -v default | head -1 | awk '{print $1}')
-        fi
-
-        if [ -n "$iface_net" ]; then
-            local iface_ip="${iface_net%%/*}"
-            ui_info "Flushing connections for interface $real_iface (network: $iface_net)"
-            conntrack -D -s "$iface_ip" 2>/dev/null && flushed=1
-            conntrack -D -d "$iface_ip" 2>/dev/null && flushed=1
-        else
-            ui_warn "Could not determine IP/net for interface $real_iface"
-        fi
-    fi
-
-    ecm_defunct_all
-
-    if [ $flushed -eq 1 ]; then
-        ui_ok "Connections forcibly flushed"
-    else
-        ui_info "No active connections found matching criteria"
-    fi
-
-    if echo "$id" | grep -qE '^[0-9]+$'; then
-        rules_remove "$id"
-        nft_apply
-        ui_ok "Rule $id removed and firewall reloaded"
-    fi
 }
 
 # ─── COMMAND: apply ───────────────────────────────────────────────────────────
@@ -781,31 +758,27 @@ cmd_config() {
     ui_banner
     ui_section "NSS-Switch Configuration"
 
+    # DEBUG PR-1 UCI show config
     if [ -z "$key" ]; then
-        # Show current config
-        cat "$CONFIG_FILE" | grep -v '^#' | grep -v '^$' | while IFS='=' read -r k v; do
-            ui_kv "$k" "$v"
-        done
+        uci show nss-switch.settings 2>/dev/null | sed 's/^nss-switch\.settings\.//'
         return 0
     fi
 
     # Set a config value
     case "$key" in
-        PERSIST_DEFAULT|DEBUG_MODE|WATCH_INTERVAL)
-            if grep -q "^$key=" "$CONFIG_FILE"; then
-                sed -i "s|^$key=.*|$key=$val|" "$CONFIG_FILE"
-                ui_ok "Set $key=$val"
-            else
-                printf "%s=%s\n" "$key" "$val" >> "$CONFIG_FILE"
-                ui_ok "Added $key=$val"
-            fi
-            ;;
+        PERSIST_DEFAULT) uci_key="persist_default" ;;
+        DEBUG_MODE)      uci_key="debug_mode" ;;
+        WATCH_INTERVAL)  uci_key="watch_interval" ;;
         *)
             ui_error "Unknown config key: $key"
             ui_info "Valid keys: PERSIST_DEFAULT, DEBUG_MODE, WATCH_INTERVAL"
             return 1
             ;;
     esac
+
+    uci set nss-switch.settings."$uci_key"="$val"
+    uci commit nss-switch
+    ui_ok "Set $key=$val"
 }
 
 # ─── COMMAND: status ──────────────────────────────────────────────────────────
@@ -873,7 +846,6 @@ cmd_help() {
     _help_cmd "add [options]"                    "Manually add a bypass rule"
     _help_cmd "list"                             "List all defined bypass rules"
     _help_cmd "remove <id>"                      "Remove a bypass rule by ID"
-    _help_cmd "kill <id|--options>"              "Kill active connections matching rule ID, or --flags"
     _help_cmd "flush [--rules|--all|--temp]"     "Remove rules from nftables"
     _help_cmd "apply"                            "Re-apply rules.conf to nftables"
     _help_cmd "status"                           "Full status dashboard"
@@ -916,21 +888,20 @@ _help_opt() {
 
 # ─── MAIN DISPATCHER ──────────────────────────────────────────────────────────
 COMMAND="${1:-help}"
-shift 2>/dev/null || true
+shift 1 2>/dev/null || true
 
 case "$COMMAND" in
-    watch)              cmd_watch "$@"  ;;
-    pick)               cmd_pick  "$@"  ;;
-    add)                cmd_add   "$@"  ;;
-    list)               cmd_list  "$@"  ;;
-    remove|rm)          cmd_remove "$@" ;;
-    flush)              cmd_flush "$@"  ;;
-    kill)               cmd_kill "$@"   ;;
-    apply)              cmd_apply "$@"  ;;
-    status)             cmd_status "$@" ;;
-    config)             cmd_config "$@" ;;
-    debug)              cmd_debug "$@"  ;;
-    help|-h|--help)     cmd_help        ;;
+    watch)           cmd_watch "$@"   ;;
+    pick)            cmd_pick  "$@"   ;;
+    add)             cmd_add   "$@"   ;;
+    list)            cmd_list  "$@"   ;;
+    remove|rm)       cmd_remove "$@"  ;;
+    flush)           cmd_flush "$@"   ;;
+    apply)           cmd_apply "$@"   ;;
+    status)          cmd_status "$@"  ;;
+    config)          cmd_config "$@"  ;;
+    debug)           cmd_debug "$@"   ;;
+    help|-h|--help)  cmd_help         ;;
     *)
         ui_error "Unknown command: $COMMAND"
         cmd_help

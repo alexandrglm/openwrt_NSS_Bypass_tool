@@ -105,6 +105,8 @@ rules_list() {
     # Overrideamos ui_rule_header
     # Este cambio también afecta en  ui.sh ...creamos  ui_rule_row_dynamic()
 
+    # DEBUG PR-1 -> NO está funcionando nada bien tema anchos dinámicos, pero se queda comentado para futuro
+
     # Calcular anchos máximos basados en el contenido
     local max_id=2 max_proto=5 max_src=7 max_dst=7 max_sport=5 max_dport=5 max_iface=5 max_persist=7
     max_id=2
@@ -204,8 +206,38 @@ rules_parse() {
 # ─── Validate all fields of a pending rule ────────────────────────────────────
 rules_validate() {
     local proto="$1" src_ip="$2" dst_ip="$3"
-    local src_port="$4" dst_port="$5" iface="$6"
+    local src_port="$4" dst_port="$5" iface="$6" comment="$7"
     local ok=1
+
+    # DEBUG PR-1: Completar IPv6 para nftables
+    _expand_ipv6() {
+        local ip="$1"
+        # Si no es IPv6 o ya tiene ::, devolver tal cual
+        echo "$ip" | grep -q ":" || { echo "$ip"; return; }
+        echo "$ip" | grep -q "::" && { echo "$ip"; return; }
+
+        local groups=$(echo "$ip" | tr ':' '\n' | grep -c . 2>/dev/null)
+        [ -z "$groups" ] && { echo "$ip"; return; }
+
+        if [ "$groups" -lt 8 ]; then
+            case "$ip" in
+                */*)
+                    local cidr="${ip#*/}"
+                    local ip_part="${ip%/*}"
+                    echo "${ip_part}::/${cidr}"
+                    ;;
+                *)
+                    echo "${ip}::"
+                    ;;
+            esac
+        else
+            echo "$ip"
+        fi
+    }
+
+    # Normalizar IPs antes de validar
+    [ "$src_ip" != "any" ] && src_ip=$(_expand_ipv6 "$src_ip")
+    [ "$dst_ip" != "any" ] && dst_ip=$(_expand_ipv6 "$dst_ip")
 
     [ "$proto" != "any" ] && ! nft_validate_proto "$proto" && {
         ui_error "Invalid protocol: $proto (use tcp|udp|icmp|icmpv6|any)"

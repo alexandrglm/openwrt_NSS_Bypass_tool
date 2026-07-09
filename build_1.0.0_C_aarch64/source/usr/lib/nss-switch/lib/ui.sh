@@ -236,9 +236,11 @@ ui_header_bar() {
     printf '%b%s %b\n' "$FG_BRIGHT" "$right" "$C_RESET"
 }
 
-# ─── Keybind hint bar - usa el ancho de la tabla ──────────────────────────────
+
+# DEBUG PR-1
+# ─── Keybind hint bar ──────────────────────────────
 ui_hint_bar() {
-    local hints="$*"
+    local hints="Ctrl+C / q exit • refresh every ${interval}s • Sorted by: ${sort_name} • 1-6: Sort column"
     local table_width
     table_width=$(ui_table_width)
 
@@ -249,6 +251,18 @@ ui_hint_bar() {
     printf "${C_RESET}${C_DIM}%b" "$(ui_clear_eol)"
     printf "\n"
 }
+# ui_hint_bar() {
+#     local hints="$*"
+#     local table_width
+#     table_width=$(ui_table_width)
+#
+#     printf "${BG_DARK}${FG_DIM} %s" "$hints"
+#     local used=$(( ${#hints} + 1 ))
+#     local pad=$(( table_width - used ))
+#     [ "$pad" -gt 0 ] && _rep ' ' "$pad"
+#     printf "${C_RESET}${C_DIM}%b" "$(ui_clear_eol)"
+#     printf "\n"
+# }
 
 # ─── Watch stats panel ────────────────────────────────────────────────────────
 ui_watch_stats_panel() {
@@ -297,11 +311,11 @@ ui_conn_header() {
     total_width=$(ui_table_width)
 
     printf "${BG_MED}${FG_DIM}"
-    printf " %-${UI_NUM_WIDTH}s %-${UI_PROTO_WIDTH}s %-${UI_SRC_WIDTH}s %-${UI_DST_WIDTH}s %-${UI_IFACE_WIDTH}s %-${UI_NSS_WIDTH}s %-${UI_BYPASS_WIDTH}s" \
-        "NUM" "PROTO" "SOURCE" "DESTINATION" "INTERFACE" "NSS" "BYPASS"
+
+    printf " %-5s %-7s %-42s %-42s %-17s %-5s %-6s" \
+        "NUM₁" "PROTO₂" "SOURCE₃" "DESTINATION₄" "INTERFACE₅" "NSS₆" "BYPASS"
     printf "${C_RESET}\n"
 
-    # Dibujar separador del mismo ancho
     printf "${FG_DIM}"
     _rep "$SLIM_H" "$total_width"
     printf "${C_RESET}\n"
@@ -320,7 +334,7 @@ _proto_to_service() {
             ;;
     esac
 
-    # Traducir por puerto
+    # Traducir por puerto, el el futuro podría usarse /etc/procotols
     case "$port" in
         22)   echo "SSH" ;;
         25)   echo "SMTP" ;;
@@ -720,6 +734,8 @@ ui_ask_choice() {
     ui_error "Choice out of range"; UI_CHOICE=""; return 1
 }
 
+
+# DEBUG PR-1
 # ─── Ask free text ────────────────────────────────────────────────────────────
 ui_ask_input() {
     local question="$1" default="$2" type="${3:-string}"
@@ -739,6 +755,18 @@ ui_ask_input() {
                 ui_error "Invalid port: $input (must be 1-65535 or 'any')"
                 ;;
             ip)
+                # Limpiar corchetes si existen
+                input=$(echo "$input" | sed 's/^\[//;s/\]$//')
+
+                # Si es IPv6 y tiene menos de 8 grupos y no tiene ::, añadir :: al final
+                if echo "$input" | grep -q ":" && ! echo "$input" | grep -q "::"; then
+                    local groups=$(echo "$input" | tr ':' '\n' | grep -c . 2>/dev/null)
+                    if [ -n "$groups" ] && [ "$groups" -lt 8 ]; then
+                        # Completar con :: al final
+                        input="${input}::"
+                    fi
+                fi
+
                 if [ "$input" = "any" ] || nft_validate_ip "$input"; then
                     UI_INPUT="$input"
                     return 0
@@ -779,8 +807,8 @@ ui_ask_num() {
 # ─── Confirm ─────────────────────────────────────────────────────────────────
 ui_confirm() { ui_ask_yn "$1" "n"; }
 
+
 # ─── Spinner ──────────────────────────────────────────────────────────────────
-# ─── Spinner with color cycling ──────────────────────────────────────────────
 ui_spinner_start() {
     export _SPINNER_MSG="$1" _SPINNER_PID=""
     (

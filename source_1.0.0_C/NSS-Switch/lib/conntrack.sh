@@ -4,14 +4,11 @@
 # ct_dump_all_full migrado a C, cambio en rendimiento brutal
 
 . "$SELF_DIR/lib/chandler.sh"
-
 CONNTRACK_FILE=/proc/net/nf_conntrack
-
 # ─── Check conntrack available ────────────────────────────────────────────────
 ct_check() {
     [ -f "$CONNTRACK_FILE" ] || { ui_error "conntrack not available"; return 1; }
 }
-
 # ─── IP to decimal ────────────────────────────────────────────────────────────
 _ip_to_dec() {
     local ip="$1"
@@ -22,7 +19,6 @@ _ip_to_dec() {
     d=$(echo "$ip" | cut -d'.' -f4)
     echo $(( (a<<24) + (b<<16) + (c<<8) + d ))
 }
-
 # ─── Check if IP is in CIDR ───────────────────────────────────────────────────
 _ct_ip_in_cidr() {
     local ip="$1" cidr="$2"
@@ -56,7 +52,6 @@ _ct_build_iface_map() {
         }
     ' > "$tmpfile"
 }
-
 # ─── Normalizar nombres de interfaz para mostrar ──────────────────────────────
 _normalize_iface_display() {
     local iface="$1"
@@ -90,30 +85,15 @@ _normalize_iface_display() {
             ;;
     esac
 }
-
 # ─── Normalizar nombres de interfaz para reglas (nftables) ────────────────────
 _normalize_iface_rule() {
     local iface="$1"
     case "$iface" in
-        wan|wan.20|pppoe-wan|wan_6)
-            echo "pppoe-wan"
-            ;;
-        lan|br-lan)
-            echo "br-lan"
-            ;;
-        lo)
-            echo "lo"
-            ;;
-        lan2)
-            echo "lan2"
-            ;;
-        lan3)
-            echo "lan3"
-            ;;
-        *)
-            echo "$iface"
-            ;;
+        *:*) iface="${iface#*:}" ;;
     esac
+    [ -z "$iface" ] && echo "any" && return
+
+    echo "$iface"
 }
 
 # ─── Compress IPv6 address RFC 5952 ──────────────────────────────────────────
@@ -154,14 +134,10 @@ _ipv6_compress() {
 ct_iface_for_src() {
     local src="$1"
     local found=""
-
-    # Detect IPv6
     if echo "$src" | grep -q ":"; then
-        # IPv6 path — use ip -6 route get
         local dev
         dev=$(ip -6 route get "$src" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1); exit}')
         if [ -z "$dev" ] || [ "$dev" = "lo" ]; then
-            # Local router IP or loopback — find which iface owns it
             local own_iface
             own_iface=$(ip -6 addr show 2>/dev/null | awk -v src="$src" '
                 /^[0-9]+: / { iface=$2; gsub(/:$/,"",iface) }
@@ -176,8 +152,6 @@ ct_iface_for_src() {
         fi
         return
     fi
-
-    # IPv4 path — existing logic
     local tmp
     tmp=$(mktemp /tmp/nss-iface.XXXXXX)
     _ct_build_iface_map "$tmp"
@@ -203,22 +177,18 @@ ct_parse_line() {
     CT_PROTO=""
     CT_SRC="" CT_SPORT="" CT_DST="" CT_DPORT=""
     CT_MARK=0 CT_STATE="" CT_STATUS=""
-
     CT_PROTO=$(echo "$line" | awk '{print $3}')
-
     case "$CT_PROTO" in
         tcp|6)   CT_STATE=$(echo "$line" | awk '{print $4}') ;;
         udp|17)  CT_STATE="stateless" ;;
         *)       CT_STATE="?" ;;
     esac
-
     CT_SRC=$(echo "$line"   | grep -oE 'src=[^ ]+' | head -1 | cut -d= -f2)
     CT_DST=$(echo "$line"   | grep -oE 'dst=[^ ]+' | head -1 | cut -d= -f2)
     CT_SPORT=$(echo "$line" | grep -oE 'sport=[^ ]+' | head -1 | cut -d= -f2)
     CT_DPORT=$(echo "$line" | grep -oE 'dport=[^ ]+' | head -1 | cut -d= -f2)
     CT_MARK=$(echo "$line"  | grep -oE 'mark=[^ ]+' | head -1 | cut -d= -f2)
     CT_STATUS=$(echo "$line"| grep -oE 'status=[^ ]+' | head -1 | cut -d= -f2)
-
     CT_SPORT="${CT_SPORT:-?}"
     CT_DPORT="${CT_DPORT:-?}"
     CT_MARK="${CT_MARK:-0}"
@@ -251,8 +221,6 @@ ct_nss_status() {
 
 
 # ─── Dump ALL connections including router-local ──────────────────────────────
-# Output format: NUM|PROTO|SRC:SPORT|DST:DPORT|IFACE|NSS|BYPASS|MARK|STATE
-# IFACE will show "local:pppoe-wan", "local:br-lan" etc for router traffic
 ct_dump_all_full() {
 
     if [ "$HAS_CT_DUMP" = "yes" ]; then
@@ -269,19 +237,15 @@ _ct_dump_all_full_shell() {
     while IFS= read -r line; do
         ct_parse_line "$line"
         [ -z "$CT_SRC" ] && continue
-# DEBUG Cambio para extraer la iface, nada de iterar y crear mapa, directamente de ip route y a correr
         local iface
         iface=$(ct_iface_for_src "$CT_SRC")
         [ -z "$iface" ] && iface="?"
-        # Normalizar nombre de interfaz para mostrar
         iface=$(_normalize_iface_display "$iface")
         num=$((num+1))
         local nss_status bypassed
         nss_status=$(ct_nss_status "$CT_MARK")
         bypassed="NO"
         ct_is_bypassed "$CT_MARK" && bypassed="YES"
-
-        # Comprimir IPv6 si aplica
         local display_src display_dst
         if echo "$CT_SRC" | grep -q ":"; then
             display_src=$(_ipv6_compress "$CT_SRC")
@@ -293,8 +257,6 @@ _ct_dump_all_full_shell() {
         else
             display_dst="$CT_DST"
         fi
-
-
         printf "%d|%s|%s#%s|%s#%s|%s|%s|%s|%s|%s\n" \
             "$num" "$CT_PROTO" \
             "$display_src" "$CT_SPORT" \
@@ -330,18 +292,40 @@ ct_count_bypassed() {
     echo "$count"
 }
 
+# DEBUG PR-1
+# ─── Clear conntrack entries matching rule criteria ───────────────────────────
+_ct_clear_all_marks() {
+    dbg "Clearing all NSS-Switch marks from conntrack"
+    local count=0
+
+    # Usar conntrack -m si está disponible (más eficiente)
+    if conntrack -D -m "$NSS_MARK" 2>/dev/null | grep -q "deleted"; then
+        count=$(conntrack -D -m "$NSS_MARK" 2>/dev/null | wc -l)
+    else
+        # Fallback: buscar y eliminar manualmente
+        conntrack -L 2>/dev/null | grep "mark=$NSS_MARK" | while read -r line; do
+            proto=$(echo "$line" | awk '{print $1}')
+            src=$(echo "$line" | grep -oE 'src=[^ ]+' | head -1 | cut -d= -f2)
+            dst=$(echo "$line" | grep -oE 'dst=[^ ]+' | head -1 | cut -d= -f2)
+            sport=$(echo "$line" | grep -oE 'sport=[^ ]+' | head -1 | cut -d= -f2)
+            dport=$(echo "$line" | grep -oE 'dport=[^ ]+' | head -1 | cut -d= -f2)
+            [ -n "$proto" ] && [ -n "$src" ] && [ -n "$dst" ] && \
+                conntrack -D -p "$proto" -s "$src" -d "$dst" --sport "$sport" --dport "$dport" 2>/dev/null && count=$((count+1))
+        done
+    fi
+
+    ui_ok "Cleared $count connections with NSS-Switch mark"
+    ecm_defunct_all
+}
 # ─── Clear conntrack entries matching rule criteria ───────────────────────────
 ct_clear_rule_marks() {
     local proto="$1" src_ip="$2" dst_ip="$3"
     local sport="$4" dport="$5" iface="$6"
-
     dbg "Flushing connections for rule: proto=$proto src=$src_ip dst=$dst_ip sport=$sport dport=$dport iface=$iface"
 
-    # Construir filtro de conntrack
     local filter=""
     [ "$proto"  != "any" ] && filter="$filter -p $proto"
 
-    # IPs
     if [ "$src_ip" != "any" ] && [ "$dst_ip" != "any" ]; then
         filter="$filter -s $src_ip -d $dst_ip"
     elif [ "$src_ip" != "any" ]; then
@@ -350,7 +334,6 @@ ct_clear_rule_marks() {
         filter="$filter -d $dst_ip"
     fi
 
-    # Puertos
     if [ "$sport" != "any" ] && [ "$dport" != "any" ]; then
         filter="$filter --sport $sport --dport $dport"
     elif [ "$sport" != "any" ]; then
@@ -359,38 +342,38 @@ ct_clear_rule_marks() {
         filter="$filter --dport $dport"
     fi
 
-    # Interfaz - resolver a IP/subred
-    local src_net=""
-    if [ "$iface" != "any" ]; then
-        case "$iface" in
-            out:*)
-                local out_iface="${iface#out:}"
-                src_net=$(ip addr show "$out_iface" 2>/dev/null | \
-                         grep -E 'inet |inet6 ' | head -1 | awk '{print $2}')
-                ;;
-            *)
-                src_net=$(ip route show dev "$iface" 2>/dev/null | \
-                         grep -v default | head -1 | awk '{print $1}')
-                ;;
-        esac
-        [ -n "$src_net" ] && filter="$filter -s $src_net"
-    fi
-
-    # Ejecutar borrado en caliente
+    # DEBUG PR-1
     if [ -n "$filter" ]; then
         dbg "conntrack -D $filter"
         conntrack -D $filter 2>/dev/null
-        ui_ok "Matching conntrack entries flushed"
+        ui_ok "Flushed matching conntrack entries"
     else
-        # Regla any - flushear todo conntrack
-        ui_warn "Rule matches ALL connections - flushing entire conntrack"
-        conntrack -F 2>/dev/null
-        ui_ok "All conntrack entries flushed"
+        # IFACE ONLY
+        if [ "$iface" != "any" ]; then
+            local real_iface="${iface#out:}"
+            # CONNTRACK -i
+            conntrack -D -i "$real_iface" 2>/dev/null && \
+                ui_ok "Flushed connections on interface $real_iface"
+        fi
+
+        # ANY rules
+        if [ "$proto" = "any" ] && [ "$src_ip" = "any" ] && [ "$dst_ip" = "any" ] && \
+           [ "$sport" = "any" ] && [ "$dport" = "any" ] && [ "$iface" = "any" ]; then
+            ui_warn "Rule matches ALL connections - flushing entire conntrack"
+            conntrack -F 2>/dev/null
+            ui_ok "All conntrack entries flushed"
+            _ct_clear_all_marks
+            return 0
+        fi
     fi
 
-    # Forzar re-evaluación en ECM
-    ecm_defunct_all
+    # DEBUG PR-1
+    _ct_clear_all_marks
 }
+
+
+
+
 
 # ─── Debug: show conntrack entries with our mark ─────────────────────────────
 ct_debug_mark() {
@@ -415,4 +398,3 @@ ct_debug_raw() {
     ui_section "Raw /proc/net/nf_conntrack"
     cat "$CONNTRACK_FILE" 2>/dev/null || ui_error "Cannot read conntrack"
 }
-
